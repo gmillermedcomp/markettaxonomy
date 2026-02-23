@@ -16,6 +16,10 @@
       --medcomp:#D32F2F;
       --martech:#1976D2;
       --point:#2E7D32;
+        /* Metric colors (separate from company colors) */
+  --metric-codes:#6B7280;      /* slate gray */
+  --metric-ks:#2563EB;         /* stronger blue */
+  --metric-market:#F59E0B;     /* amber */
 
       --ink:#111;
       --muted:#333;
@@ -323,9 +327,9 @@
       border-radius:999px;
       transition: width 0.18s ease;
     }
-    .fill.codes{ background: var(--medcomp); }
-    .fill.ks{ background: var(--martech); }
-    .fill.mkt{ background: var(--point); opacity:0.6; }
+    .fill.codes{ background: var(--metric-codes); }
+    .fill.ks{ background: var(--metric-ks); }
+    .fill.mkt{ background: var(--metric-market); opacity:0.6; }
 
     .results{
       border:1px solid var(--line);
@@ -587,9 +591,9 @@
               </div>
 
               <div style="display:flex; gap:10px; flex-wrap:wrap; margin: 6px 0 8px 0;">
-                <span class="pill" style="border-color:#D32F2F; color:#D32F2F;">Codes</span>
-                <span class="pill" style="border-color:#1976D2; color:#1976D2;">510(k)s</span>
-                <span class="pill" style="border-color:#2E7D32; color:#2E7D32;">Market size (TBD)</span>
+                <span class="pill" style="border-color:var(--metric-codes); color:var(--metric-codes);">Codes</span>
+<span class="pill" style="border-color:var(--metric-ks); color:var(--metric-ks);">510(k)s</span>
+<span class="pill" style="border-color:var(--metric-market); color:var(--metric-market);">Market size (TBD)</span>
               </div>
 
               <div class="bars" id="barsCombo"></div>
