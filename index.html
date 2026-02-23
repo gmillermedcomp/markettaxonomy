@@ -1321,40 +1321,49 @@
         }
       }
 
-      function buildDomains() {
-        const specSet = new Set();
-        const years = [];
+      function buildDomains(){
+  // specialties from codes + 510ks
+  const set = new Set();
+  codes.forEach(r => set.add(normSpec(r.Specialty || r.specialty)));
 
-        for (let i = 0; i < codes.length; i++) {
-          const r = codes[i];
-          specSet.add(normSpec(r.Specialty || r.specialty));
-        }
+  let minY = Infinity;
+  let maxY = -Infinity;
+  let sawYear = false;
 
-        for (const list of ksByCode.values()) {
-          for (let i = 0; i < list.length; i++) {
-            const k = list[i];
-            specSet.add(normSpec(k.Specialty || k.specialty));
-            years.push(k._decisionYear);
-          }
-        }
-
-        specialties = Array.from(specSet).sort((a, b) => a.localeCompare(b));
-        if (years.length) {
-          yearDomain.min = Math.min(...years);
-          yearDomain.max = Math.max(...years);
-        }
-
-        el.yearMin.min = String(yearDomain.min);
-        el.yearMin.max = String(yearDomain.max);
-        el.yearMax.min = String(yearDomain.min);
-        el.yearMax.max = String(yearDomain.max);
-
-        el.yearMin.value = String(yearDomain.min);
-        el.yearMax.value = String(yearDomain.max);
-
-        state.yearMin = yearDomain.min;
-        state.yearMax = yearDomain.max;
+  for(const list of ksByCode.values()){
+    for(const k of list){
+      set.add(normSpec(k.Specialty || k.specialty));
+      const y = k._decisionYear;
+      if(typeof y === "number" && Number.isFinite(y)){
+        sawYear = true;
+        if(y < minY) minY = y;
+        if(y > maxY) maxY = y;
       }
+    }
+  }
+
+  specialties = Array.from(set).sort((a,b) => a.localeCompare(b));
+
+  if(sawYear){
+    yearDomain.min = minY;
+    yearDomain.max = maxY;
+  } else {
+    yearDomain.min = 2000;
+    yearDomain.max = new Date().getFullYear();
+  }
+
+  // configure sliders
+  el.yearMin.min = String(yearDomain.min);
+  el.yearMin.max = String(yearDomain.max);
+  el.yearMax.min = String(yearDomain.min);
+  el.yearMax.max = String(yearDomain.max);
+
+  el.yearMin.value = String(yearDomain.min);
+  el.yearMax.value = String(yearDomain.max);
+
+  state.yearMin = yearDomain.min;
+  state.yearMax = yearDomain.max;
+}
 
       async function load() {
         try {
