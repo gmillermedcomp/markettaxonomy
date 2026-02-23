@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Market Taxonomy Explorer</title>
 
-  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <!-- Stop the harmless /favicon.ico 404 without needing a real file -->
+  <link rel="icon" href="data:,">
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
 
   <style>
@@ -186,16 +189,27 @@
       font-weight:900;
       color:var(--ink);
       white-space:nowrap;
+      min-width: 40px;
     }
-    .range-row input[type="range"]{
+    .year-input{
       width: 100%;
+      border:1px solid #d1d5db;
+      border-radius:10px;
+      padding:8px 10px;
+      font-size:13px;
+      outline:none;
+      background:#fff;
+    }
+    .year-input:focus{
+      border-color:var(--medcomp);
+      box-shadow:0 0 0 3px rgba(211,47,47,0.12);
     }
     .range-val{
       font-size:12px;
       font-weight:900;
       color:var(--muted);
       white-space:nowrap;
-      min-width: 70px;
+      min-width: 120px;
       text-align:right;
     }
 
@@ -264,7 +278,7 @@
       display:flex;
       flex-direction:column;
       gap:6px;
-      padding-bottom:8px;
+      padding-bottom:10px;
       border-bottom:1px dashed rgba(0,0,0,0.06);
     }
     .bar:last-child{ border-bottom:none; padding-bottom:0; }
@@ -288,24 +302,30 @@
       color:var(--muted);
       white-space:nowrap;
     }
-    .track{
+
+    /* Three visible bars (each has a background track + a filled portion). */
+    .track3{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    .line{
       height:12px;
       border-radius:999px;
-      background:var(--line);
+      background: var(--line);
       overflow:hidden;
-      display:flex;
-      gap:4px;
-      padding:2px;
+      position:relative;
     }
-    .seg{
-      height:100%;
-      border-radius:999px;
+    .fill{
+      position:absolute;
+      inset:0 auto 0 0;
       width:0%;
-      background:#111;
-      transition:width 0.2s ease;
+      border-radius:999px;
+      transition: width 0.18s ease;
     }
-    .seg.codes{ background:#111; }
-    .seg.ks{ background:#6b7280; }
+    .fill.codes{ background: var(--medcomp); }
+    .fill.ks{ background: var(--martech); }
+    .fill.mkt{ background: var(--point); opacity:0.6; }
 
     .results{
       border:1px solid var(--line);
@@ -493,7 +513,7 @@
         <div>
           <div class="kicker">Market taxonomy explorer</div>
           <div class="sub">
-            Filters apply to codes and to linked 510(k)s. Year sliders filter by 510(k) Decision Year.
+            Filters apply to codes and to linked 510(k)s. Year range filters by 510(k) Decision Year.
             Click a code card to view its 510(k)s.
           </div>
           <div class="status" id="status">Loading data...</div>
@@ -536,17 +556,19 @@
               510(k) decision year range
               <span id="yearHint" style="color:var(--muted); font-weight:900; font-size:12px;"></span>
             </div>
+
             <div class="range-wrap">
               <div class="range-row">
                 <label for="yearMin">Min</label>
-                <input id="yearMin" type="range" min="2000" max="2026" step="1" value="2000">
-                <div class="range-val" id="yearMinVal">2000</div>
+                <input id="yearMin" class="year-input" type="number" inputmode="numeric" placeholder="e.g., 1990">
+                <div class="range-val" id="yearMinVal"></div>
               </div>
               <div class="range-row">
                 <label for="yearMax">Max</label>
-                <input id="yearMax" type="range" min="2000" max="2026" step="1" value="2026">
-                <div class="range-val" id="yearMaxVal">2026</div>
+                <input id="yearMax" class="year-input" type="number" inputmode="numeric" placeholder="e.g., 2026">
+                <div class="range-val" id="yearMaxVal"></div>
               </div>
+              <div class="status" id="yearHelp"></div>
             </div>
           </div>
 
@@ -559,7 +581,7 @@
         <main class="main" aria-label="Overview and results">
           <div class="tiles" aria-label="Overview tiles">
             <div class="tile" style="grid-column: 1 / -1;">
-              <div class="tile-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <div class="tile-title">
                 <span>By specialty (codes vs 510(k)s vs market size)</span>
                 <span style="color:var(--muted);" id="totals"></span>
               </div>
@@ -623,9 +645,6 @@
 
   <script>
     (function () {
-      // If you want to stop the harmless favicon.ico 404, add this in your <head>:
-      // <link rel="icon" href="data:,">
-
       // GitHub Pages is case-sensitive. These must match your filenames exactly.
       const CODES_FILE = "./Codes.csv";
       const KS_FILE_1  = "./510k.csv";
@@ -648,6 +667,7 @@
         yearMinVal:  document.getElementById("yearMinVal"),
         yearMaxVal:  document.getElementById("yearMaxVal"),
         yearHint:    document.getElementById("yearHint"),
+        yearHelp:    document.getElementById("yearHelp"),
 
         modalOverlay: document.getElementById("modalOverlay"),
         modalClose:   document.getElementById("modalClose"),
@@ -662,9 +682,9 @@
 
       let codes = [];
       let specialties = [];
-      let yearDomain = { min: 2000, max: new Date().getFullYear() };
+      let yearDomain = { min: 1976, max: new Date().getFullYear() };
 
-      // ProductCode -> 510k rows (from both files)
+      // ProductCode -> 510k rows
       const ksByCode = new Map();
 
       const state = {
@@ -729,9 +749,43 @@
         return "";
       }
 
-      function decisionYearFromRow(r) {
-        const y = Number(safe(r.DecisionYear));
+      // Robust year extraction:
+      // - Accepts "1995", "1995-06-01", "06/01/1995", etc.
+      // - Rejects 0, 1, 12, etc.
+      function extractYear(value) {
+        const s = safe(value);
+        if (!s) return null;
+
+        // If it's purely numeric, still enforce 4-digit sanity
+        if (/^\d+$/.test(s)) {
+          if (s.length === 4) {
+            const y = Number(s);
+            return Number.isFinite(y) ? y : null;
+          }
+          return null;
+        }
+
+        const m = s.match(/(19\d{2}|20\d{2})/);
+        if (!m) return null;
+        const y = Number(m[1]);
         return Number.isFinite(y) ? y : null;
+      }
+
+      function decisionYearFromRow(r) {
+        // Primary: DecisionYear column
+        let y = extractYear(r.DecisionYear);
+
+        // Fallbacks if your CSV sometimes names it differently
+        if (y === null) y = extractYear(r.DECISIONYEAR);
+        if (y === null) y = extractYear(r.Decision_Date);
+        if (y === null) y = extractYear(r.DecisionDate);
+        if (y === null) y = extractYear(r.Decision_Date_Time);
+
+        // Final sanity clamp
+        const current = new Date().getFullYear() + 1;
+        if (y === null) return null;
+        if (y < 1976 || y > current) return null;
+        return y;
       }
 
       // CSV parser: iterative, no recursion
@@ -784,7 +838,7 @@
         return out;
       }
 
-      // Filtering helpers
+      // Filters
       function matchesCompany(flags) {
         if (state.company.size === 0) return true;
         return (
@@ -814,9 +868,6 @@
         return out;
       }
 
-      // Search: fast and stable.
-      // We DO NOT concatenate every linked 510k row into a mega-string per code, per keystroke.
-      // Instead: search code fields always, and for 510k fields scan only the linked list when needed.
       function matchesSearch(codeRow) {
         const q = state.q;
         if (!q) return true;
@@ -874,7 +925,6 @@
           const flags = companyFlagsFromRow(codeRow);
           if (matchesCompany(flags)) return true;
 
-          // allow match via linked 510ks too
           const linked = filteredKsForCode(pc);
           for (let i = 0; i < linked.length; i++) {
             if (matchesCompany(companyFlagsFromRow(linked[i]))) return true;
@@ -896,10 +946,6 @@
 
       function filteredKsForFilteredCodes(filteredCodeRows) {
         const set = new Set(filteredCodeRows.map(r => safe(r.PRODUCTCODE)));
-        let count = 0;
-
-        // We only need counts and per-specialty aggregation in render, but the modal needs rows.
-        // Here we return the rows for counting by specialty as the UI expects it.
         const out = [];
         for (const [pc, list] of ksByCode.entries()) {
           if (!set.has(pc)) continue;
@@ -909,13 +955,12 @@
             if (!withinYearRange(k)) continue;
             if (state.company.size && !matchesCompany(companyFlagsFromRow(k))) continue;
             out.push(k);
-            count++;
           }
         }
         return out;
       }
 
-      // Chips (single delegation, attached once)
+      // Chips
       function makeChip(label) {
         const b = document.createElement("button");
         b.type = "button";
@@ -957,7 +1002,7 @@
       toggleFromContainer(el.chipClass, state.deviceClass);
       toggleFromContainer(el.chipSpec, state.specialty);
 
-      // Combined bars
+      // Bars
       function topNByMax(codesMap, ksMap, n) {
         const keys = new Set([...Object.keys(codesMap), ...Object.keys(ksMap)]);
         const arr = Array.from(keys).map(k => ({
@@ -987,7 +1032,7 @@
 
         const maxCodes = Math.max(1, ...rows.map(r => r.codes));
         const maxKs    = Math.max(1, ...rows.map(r => r.ks));
-        const maxMkt   = 1;
+        const maxMkt   = Math.max(1, ...rows.map(r => r.market)); // stays 1 if all 0
 
         for (let i = 0; i < rows.length; i++) {
           const r = rows[i];
@@ -1010,42 +1055,41 @@
           head.appendChild(lab);
           head.appendChild(nums);
 
-          const track = document.createElement("div");
-          track.className = "track";
-          track.style.display = "flex";
-          track.style.flexDirection = "column";
-          track.style.gap = "4px";
+          const track3 = document.createElement("div");
+          track3.className = "track3";
 
-          const segCodes = document.createElement("div");
-          segCodes.className = "seg";
-          segCodes.style.height = "10px";
-          segCodes.style.width = Math.round((r.codes / maxCodes) * 100) + "%";
-          segCodes.style.background = "#D32F2F";
+          const lineCodes = document.createElement("div");
+          lineCodes.className = "line";
+          const fillCodes = document.createElement("div");
+          fillCodes.className = "fill codes";
+          fillCodes.style.width = Math.round((r.codes / maxCodes) * 100) + "%";
+          lineCodes.appendChild(fillCodes);
 
-          const segKs = document.createElement("div");
-          segKs.className = "seg";
-          segKs.style.height = "10px";
-          segKs.style.width = Math.round((r.ks / maxKs) * 100) + "%";
-          segKs.style.background = "#1976D2";
+          const lineKs = document.createElement("div");
+          lineKs.className = "line";
+          const fillKs = document.createElement("div");
+          fillKs.className = "fill ks";
+          fillKs.style.width = Math.round((r.ks / maxKs) * 100) + "%";
+          lineKs.appendChild(fillKs);
 
-          const segMkt = document.createElement("div");
-          segMkt.className = "seg";
-          segMkt.style.height = "10px";
-          segMkt.style.width = Math.round((r.market / maxMkt) * 100) + "%";
-          segMkt.style.background = "#2E7D32";
-          segMkt.style.opacity = "0.6";
+          const lineMkt = document.createElement("div");
+          lineMkt.className = "line";
+          const fillMkt = document.createElement("div");
+          fillMkt.className = "fill mkt";
+          fillMkt.style.width = Math.round((r.market / maxMkt) * 100) + "%";
+          lineMkt.appendChild(fillMkt);
 
-          track.appendChild(segCodes);
-          track.appendChild(segKs);
-          track.appendChild(segMkt);
+          track3.appendChild(lineCodes);
+          track3.appendChild(lineKs);
+          track3.appendChild(lineMkt);
 
           bar.appendChild(head);
-          bar.appendChild(track);
+          bar.appendChild(track3);
           container.appendChild(bar);
         }
       }
 
-      // Modal
+      // Modal helpers
       function tdText(txt) {
         const td = document.createElement("td");
         td.textContent = txt || "";
@@ -1086,7 +1130,6 @@
 
         let linked = filteredKsForCode(productCode);
 
-        // Apply search again in modal if needed (keeps modal consistent with main search box)
         if (state.q) {
           const q = state.q;
           linked = linked.filter(k => {
@@ -1133,8 +1176,6 @@
             tr.appendChild(tdText(year));
             tr.appendChild(tdText(safe(k.Type)));
             tr.appendChild(tdText(safe(k.SpecificDeviceName)));
-
-            // Company in modal comes ONLY from 510k rows
             tr.appendChild(tdCompanyPills(companyFlagsFromRow(k)));
 
             el.modalTbody.appendChild(tr);
@@ -1158,20 +1199,48 @@
         if (e.key === "Escape") closeModal();
       });
 
+      // Year inputs: parse + clamp + allow blanks (meaning "no bound")
+      function parseYearInput(v) {
+        const s = safe(v);
+        if (!s) return null;
+        const y = Number(s);
+        if (!Number.isFinite(y)) return null;
+        if (y < 1976 || y > (new Date().getFullYear() + 1)) return null;
+        return Math.trunc(y);
+      }
+
+      function syncYearUI() {
+        // show domain hint and the "effective" values
+        el.yearHelp.textContent = "Available years detected: " + yearDomain.min + " to " + yearDomain.max + ". Leave blank for no bound.";
+        el.yearMinVal.textContent = state.yearMin === null ? "No min" : ("Using " + state.yearMin);
+        el.yearMaxVal.textContent = state.yearMax === null ? "No max" : ("Using " + state.yearMax);
+        const hintMin = (state.yearMin === null ? "Any" : String(state.yearMin));
+        const hintMax = (state.yearMax === null ? "Any" : String(state.yearMax));
+        el.yearHint.textContent = hintMin + " to " + hintMax;
+      }
+
       // Main render
       function render() {
-        const minY = Math.min(Number(el.yearMin.value), Number(el.yearMax.value));
-        const maxY = Math.max(Number(el.yearMin.value), Number(el.yearMax.value));
-        state.yearMin = minY;
-        state.yearMax = maxY;
-
-        el.yearMinVal.textContent = String(minY);
-        el.yearMaxVal.textContent = String(maxY);
-        el.yearHint.textContent = minY + " to " + maxY;
-
         state.q = (el.q.value || "").trim().toLowerCase();
 
+        // year bounds from inputs
+        let yMin = parseYearInput(el.yearMin.value);
+        let yMax = parseYearInput(el.yearMax.value);
+
+        // If user types reversed, swap
+        if (yMin !== null && yMax !== null && yMin > yMax) {
+          const tmp = yMin; yMin = yMax; yMax = tmp;
+        }
+
+        // Clamp to detected domain if both exist
+        if (yMin !== null) yMin = Math.max(yearDomain.min, Math.min(yearDomain.max, yMin));
+        if (yMax !== null) yMax = Math.max(yearDomain.min, Math.min(yearDomain.max, yMax));
+
+        state.yearMin = yMin;
+        state.yearMax = yMax;
+
         setChipActives();
+        syncYearUI();
 
         const fc = filteredCodes();
         const fk = filteredKsForFilteredCodes(fc);
@@ -1180,12 +1249,13 @@
         if (state.company.size) parts.push("Company: " + state.company.size);
         if (state.deviceClass.size) parts.push("Class: " + state.deviceClass.size);
         if (state.specialty.size) parts.push("Specialty: " + state.specialty.size);
-        parts.push("Years: " + state.yearMin + " to " + state.yearMax);
+        parts.push("Years: " + (state.yearMin === null ? "Any" : state.yearMin) + " to " + (state.yearMax === null ? "Any" : state.yearMax));
         if (state.q) parts.push("Search: on");
 
         el.count.textContent = fc.length + " codes | " + fk.length + " 510(k)s" + (parts.length ? " | " + parts.join(" | ") : "");
-        el.totals.textContent = fc.length + " codes, " + fk.length + " 510(k)s";
+        el.totals.textContent = (fc.length + " codes, " + fk.length + " 510(k)s");
 
+        // Tallies by specialty
         const codesBySpec = {}; // spec -> Set(productcode)
         const ksBySpec = {};    // spec -> count
 
@@ -1240,8 +1310,6 @@
           const spec = normSpec(r.Specialty || r.specialty);
           const cls = normClass(r.DEVICECLASS);
 
-          // Card color:
-          // Prefer Codes.csv flags. If none, infer from linked 510ks (within current filters).
           let displayFlags = companyFlagsFromRow(r);
           if (!anyCompany(displayFlags)) {
             const linked = filteredKsForCode(pc);
@@ -1311,59 +1379,63 @@
         for (let i = 0; i < rows.length; i++) {
           const k = rows[i];
           const pc = safe(k.ProductCode || k.PRODUCTCODE || k.productCode);
+          if (!pc) continue;
+
           k.ProductCode = pc;
-
           k._decisionYear = decisionYearFromRow(k);
-          if (k._decisionYear === null) continue; // DecisionYear is required for filtering
 
+          // Keep the row even if year is null, but it will be filtered out by year logic
           if (!ksByCode.has(pc)) ksByCode.set(pc, []);
           ksByCode.get(pc).push(k);
         }
       }
 
-      function buildDomains(){
-  // specialties from codes + 510ks
-  const set = new Set();
-  codes.forEach(r => set.add(normSpec(r.Specialty || r.specialty)));
+      function buildDomains() {
+        const specSet = new Set();
+        let minY = Infinity;
+        let maxY = -Infinity;
+        let sawYear = false;
 
-  let minY = Infinity;
-  let maxY = -Infinity;
-  let sawYear = false;
+        for (let i = 0; i < codes.length; i++) {
+          const r = codes[i];
+          specSet.add(normSpec(r.Specialty || r.specialty));
+        }
 
-  for(const list of ksByCode.values()){
-    for(const k of list){
-      set.add(normSpec(k.Specialty || k.specialty));
-      const y = k._decisionYear;
-      if(typeof y === "number" && Number.isFinite(y)){
-        sawYear = true;
-        if(y < minY) minY = y;
-        if(y > maxY) maxY = y;
+        for (const list of ksByCode.values()) {
+          for (let i = 0; i < list.length; i++) {
+            const k = list[i];
+            specSet.add(normSpec(k.Specialty || k.specialty));
+            const y = k._decisionYear;
+            if (typeof y === "number" && Number.isFinite(y)) {
+              sawYear = true;
+              if (y < minY) minY = y;
+              if (y > maxY) maxY = y;
+            }
+          }
+        }
+
+        specialties = Array.from(specSet).sort((a, b) => a.localeCompare(b));
+
+        if (sawYear) {
+          yearDomain.min = minY;
+          yearDomain.max = maxY;
+        } else {
+          yearDomain.min = 1976;
+          yearDomain.max = new Date().getFullYear();
+        }
+
+        // Configure input min/max so users can’t type nonsense, but allow blanks
+        el.yearMin.min = String(yearDomain.min);
+        el.yearMin.max = String(yearDomain.max);
+        el.yearMax.min = String(yearDomain.min);
+        el.yearMax.max = String(yearDomain.max);
+
+        // Defaults: blank means no bound, but set placeholders to domain
+        el.yearMin.placeholder = String(yearDomain.min);
+        el.yearMax.placeholder = String(yearDomain.max);
+
+        syncYearUI();
       }
-    }
-  }
-
-  specialties = Array.from(set).sort((a,b) => a.localeCompare(b));
-
-  if(sawYear){
-    yearDomain.min = minY;
-    yearDomain.max = maxY;
-  } else {
-    yearDomain.min = 2000;
-    yearDomain.max = new Date().getFullYear();
-  }
-
-  // configure sliders
-  el.yearMin.min = String(yearDomain.min);
-  el.yearMin.max = String(yearDomain.max);
-  el.yearMax.min = String(yearDomain.min);
-  el.yearMax.max = String(yearDomain.max);
-
-  el.yearMin.value = String(yearDomain.min);
-  el.yearMax.value = String(yearDomain.max);
-
-  state.yearMin = yearDomain.min;
-  state.yearMax = yearDomain.max;
-}
 
       async function load() {
         try {
@@ -1379,7 +1451,6 @@
           el.status.textContent = "Parsing Codes.csv...";
           codes = parseCSV(codesText);
 
-          // normalize code rows
           for (let i = 0; i < codes.length; i++) {
             const r = codes[i];
             r.PRODUCTCODE = safe(r.PRODUCTCODE || r.ProductCode || r.productCode);
@@ -1397,6 +1468,8 @@
           rebuildChips();
 
           el.q.addEventListener("input", requestRender);
+
+          // year inputs: render on change (and input for immediate feedback)
           el.yearMin.addEventListener("input", requestRender);
           el.yearMax.addEventListener("input", requestRender);
 
@@ -1405,8 +1478,8 @@
             state.deviceClass.clear();
             state.specialty.clear();
             el.q.value = "";
-            el.yearMin.value = String(yearDomain.min);
-            el.yearMax.value = String(yearDomain.max);
+            el.yearMin.value = "";
+            el.yearMax.value = "";
             requestRender();
           });
 
