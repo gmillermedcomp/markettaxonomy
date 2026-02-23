@@ -908,73 +908,55 @@
       }
 
       // -----------------------
-      // Chip UI (IMPORTANT FIX)
-      // Your previous code toggled twice because it had:
-      //  - per-chip click handlers AND
-      //  - delegated container click handlers
-      // That cancels out, so chips "do nothing".
-      // We now use ONLY delegation.
-      // -----------------------
-      function makeChip(label){
-        const b = document.createElement("button");
-        b.type = "button";
-        b.className = "chip";
-        b.textContent = label;
-        return b;
-      }
+// Chip UI (safe, no recursion, no double handlers)
+// -----------------------
+function makeChip(label){
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "chip";
+  b.textContent = label;
+  return b;
+}
 
-      function rebuildChips(){
-        el.chipCompany.innerHTML = "";
-        el.chipClass.innerHTML = "";
-        el.chipSpec.innerHTML = "";
+function rebuildChips(){
+  el.chipCompany.innerHTML = "";
+  el.chipClass.innerHTML = "";
+  el.chipSpec.innerHTML = "";
 
-        COMPANIES.forEach(v => el.chipCompany.appendChild(makeChip(v)));
-        DEVICE_CLASSES.forEach(v => el.chipClass.appendChild(makeChip(v)));
-        specialties.forEach(v => el.chipSpec.appendChild(makeChip(v)));
+  for(const v of COMPANIES) el.chipCompany.appendChild(makeChip(v));
+  for(const v of DEVICE_CLASSES) el.chipClass.appendChild(makeChip(v));
+  for(const v of specialties) el.chipSpec.appendChild(makeChip(v));
 
-        setChipActives();
-      }
+  setChipActives();
+}
 
-      function setChipActives(){
-        for(const btn of el.chipCompany.children){
-          btn.classList.toggle("active", state.company.has(btn.textContent));
-        }
-        for(const btn of el.chipClass.children){
-          btn.classList.toggle("active", state.deviceClass.has(btn.textContent));
-        }
-        for(const btn of el.chipSpec.children){
-          btn.classList.toggle("active", state.specialty.has(btn.textContent));
-        }
-      }
+function setChipActives(){
+  for(const btn of el.chipCompany.children){
+    btn.classList.toggle("active", state.company.has(btn.textContent));
+  }
+  for(const btn of el.chipClass.children){
+    btn.classList.toggle("active", state.deviceClass.has(btn.textContent));
+  }
+  for(const btn of el.chipSpec.children){
+    btn.classList.toggle("active", state.specialty.has(btn.textContent));
+  }
+}
 
-      function attachChipDelegates(){
-        el.chipCompany.addEventListener("click", (e) => {
-          const t = e.target;
-          if(!t || !t.classList || !t.classList.contains("chip")) return;
-          const label = t.textContent;
-          if(state.company.has(label)) state.company.delete(label);
-          else state.company.add(label);
-          render();
-        });
+function toggleFromContainer(containerEl, setRef){
+  containerEl.addEventListener("click", (e) => {
+    const t = e.target;
+    if(!t || !t.classList || !t.classList.contains("chip")) return;
+    const label = t.textContent;
+    if(setRef.has(label)) setRef.delete(label);
+    else setRef.add(label);
+    render();
+  });
+}
 
-        el.chipClass.addEventListener("click", (e) => {
-          const t = e.target;
-          if(!t || !t.classList || !t.classList.contains("chip")) return;
-          const label = t.textContent;
-          if(state.deviceClass.has(label)) state.deviceClass.delete(label);
-          else state.deviceClass.add(label);
-          render();
-        });
-
-        el.chipSpec.addEventListener("click", (e) => {
-          const t = e.target;
-          if(!t || !t.classList || !t.classList.contains("chip")) return;
-          const label = t.textContent;
-          if(state.specialty.has(label)) state.specialty.delete(label);
-          else state.specialty.add(label);
-          render();
-        });
-      }
+// Call exactly once, near the bottom, before load()
+toggleFromContainer(el.chipCompany, state.company);
+toggleFromContainer(el.chipClass, state.deviceClass);
+toggleFromContainer(el.chipSpec, state.specialty);
 
       // -----------------------
       // Combined bars (one big window)
