@@ -1,0 +1,1513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Market Taxonomy Explorer</title>
+
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --medcomp:#D32F2F;
+      --martech:#1976D2;
+      --point:#2E7D32;
+
+      --ink:#111;
+      --muted:#333;
+      --line:#e5e7eb;
+      --bg:#f4f5f7;
+      --card:#ffffff;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family:'Roboto', sans-serif;
+      color:var(--ink);
+      background:var(--bg);
+    }
+
+    header{
+      background:var(--card);
+      border-bottom:1px solid var(--line);
+      padding:16px 18px;
+      display:flex;
+      align-items:center;
+      gap:14px;
+    }
+    header img{ width:140px; height:auto; display:block; }
+    .head-txt{ display:flex; flex-direction:column; gap:4px; }
+    .head-title{ font-size:18px; font-weight:900; margin:0; }
+    .head-sub{ font-size:12px; color:var(--muted); margin:0; }
+
+    .wrap{
+      max-width:1300px;
+      margin:0 auto;
+      padding:16px 16px 26px 16px;
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+    }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:14px;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+    }
+
+    .topbar{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+    .kicker{ font-weight:900; font-size:13px; }
+    .sub{
+      margin-top:4px;
+      color:var(--muted);
+      font-size:12px;
+      max-width:900px;
+      line-height:1.25;
+    }
+
+    .legend{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      padding:6px 10px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:900;
+      border:1px solid #d1d5db;
+      background:#fff;
+      white-space:nowrap;
+    }
+    .badge.medcomp{ border-color:var(--medcomp); color:var(--medcomp); }
+    .badge.martech{ border-color:var(--martech); color:var(--martech); }
+    .badge.point{ border-color:var(--point); color:var(--point); }
+    .badge.other{ border-color:#9ca3af; color:#374151; }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 380px 1fr;
+      gap:14px;
+    }
+    @media (max-width:1100px){
+      .grid{ grid-template-columns:1fr; }
+    }
+
+    .filters{
+      background:#fafafa;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:12px;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+
+    .filter-block{ display:flex; flex-direction:column; gap:8px; }
+    .filter-title{
+      font-size:12px;
+      font-weight:900;
+      color:var(--ink);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .chiprow{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+    .chip{
+      border:1px solid #d1d5db;
+      border-radius:999px;
+      padding:7px 10px;
+      background:#fff;
+      font-weight:900;
+      font-size:12px;
+      cursor:pointer;
+      transition: all 0.15s ease;
+      user-select:none;
+    }
+    .chip:hover{
+      transform: translateY(-1px);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    }
+    .chip.active{
+      background:var(--ink);
+      color:#fff;
+      border-color:var(--ink);
+    }
+
+    .search{
+      width:100%;
+      border:1px solid #d1d5db;
+      border-radius:10px;
+      padding:8px 10px;
+      font-size:13px;
+      outline:none;
+      background:#fff;
+    }
+    .search:focus{
+      border-color:var(--medcomp);
+      box-shadow:0 0 0 3px rgba(211,47,47,0.12);
+    }
+
+    .range-wrap{
+      border:1px solid var(--line);
+      background:#fff;
+      border-radius:12px;
+      padding:10px 10px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .range-row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .range-row label{
+      font-size:12px;
+      font-weight:900;
+      color:var(--ink);
+      white-space:nowrap;
+    }
+    .range-row input[type="range"]{
+      width: 100%;
+    }
+    .range-val{
+      font-size:12px;
+      font-weight:900;
+      color:var(--muted);
+      white-space:nowrap;
+      min-width: 70px;
+      text-align:right;
+    }
+
+    .actions{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .btn{
+      border:1px solid #d1d5db;
+      border-radius:10px;
+      padding:8px 10px;
+      font-weight:900;
+      font-size:12px;
+      background:#fff;
+      cursor:pointer;
+    }
+    .btn:hover{ box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+    .count{
+      font-size:12px;
+      font-weight:900;
+    }
+
+    .main{
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+
+    .tiles{
+      display:grid;
+      grid-template-columns: repeat(3, minmax(220px, 1fr));
+      gap:10px;
+    }
+    @media (max-width:1100px){
+      .tiles{ grid-template-columns:1fr; }
+    }
+    .tile{
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px 12px;
+      background:#fff;
+      min-height: 190px;
+    }
+    .tile-title{
+      font-size:12px;
+      font-weight:900;
+      margin-bottom:8px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .tile-note{
+      font-size:12px;
+      color:var(--muted);
+      margin-top:8px;
+      line-height:1.25;
+    }
+
+    .bars{ display:flex; flex-direction:column; gap:10px; }
+    .bar{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      padding-bottom:8px;
+      border-bottom:1px dashed rgba(0,0,0,0.06);
+    }
+    .bar:last-child{ border-bottom:none; padding-bottom:0; }
+    .bar-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .bar-label{
+      font-size:12px;
+      font-weight:900;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 65%;
+    }
+    .bar-nums{
+      font-size:12px;
+      font-weight:900;
+      color:var(--muted);
+      white-space:nowrap;
+    }
+    .track{
+      height:12px;
+      border-radius:999px;
+      background:var(--line);
+      overflow:hidden;
+      display:flex;
+      gap:4px;
+      padding:2px;
+    }
+    .seg{
+      height:100%;
+      border-radius:999px;
+      width:0%;
+      background:#111;
+      transition:width 0.2s ease;
+    }
+    .seg.codes{ background:#111; }
+    .seg.ks{ background:#6b7280; }
+
+    .results{
+      border:1px solid var(--line);
+      border-radius:12px;
+      background:#fff;
+      overflow:hidden;
+    }
+    .results-head{
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px 12px;
+      border-bottom:1px solid var(--line);
+      background:#fafafa;
+      flex-wrap:wrap;
+    }
+    .results-title{ font-size:12px; font-weight:900; }
+    .results-note{ font-size:12px; color:var(--muted); }
+
+    .list{
+      padding:10px 12px;
+      display:grid;
+      grid-template-columns: repeat(2, minmax(300px, 1fr));
+      gap:8px;
+    }
+    @media (max-width: 900px){
+      .list{ grid-template-columns: 1fr; }
+    }
+
+    .item{
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px 10px;
+      background:#fff;
+      cursor:pointer;
+      transition: all 0.12s ease;
+    }
+    .item:hover{
+      transform: translateY(-1px);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    }
+    .item.medcomp{ border-color: rgba(211,47,47,0.65); box-shadow: 0 0 0 3px rgba(211,47,47,0.08); }
+    .item.martech{ border-color: rgba(25,118,210,0.65); box-shadow: 0 0 0 3px rgba(25,118,210,0.08); }
+    .item.point{ border-color: rgba(46,125,50,0.65); box-shadow: 0 0 0 3px rgba(46,125,50,0.08); }
+
+    .item-name{
+      font-weight:900;
+      font-size:13px;
+      margin-bottom:6px;
+      color:var(--ink);
+    }
+    .meta{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+    }
+    .pill{
+      border-radius:999px;
+      padding:4px 8px;
+      font-size:11px;
+      font-weight:900;
+      border:1px solid rgba(0,0,0,0.08);
+      background:#fff;
+    }
+    .pill.medcomp{ border-color:var(--medcomp); color:var(--medcomp); }
+    .pill.martech{ border-color:var(--martech); color:var(--martech); }
+    .pill.point{ border-color:var(--point); color:var(--point); }
+    .pill.k{ border-color:#9ca3af; color:#374151; }
+
+    .status{
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.25;
+    }
+    .status.error{ color: #b91c1c; font-weight:900; }
+
+    /* Modal */
+    .modal-overlay{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.45);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+      z-index:9999;
+    }
+    .modal{
+      width:min(1100px, 98vw);
+      max-height:90vh;
+      overflow:auto;
+      background:#fff;
+      border-radius:14px;
+      border:1px solid var(--line);
+      box-shadow: 0 20px 80px rgba(0,0,0,0.20);
+    }
+    .modal-head{
+      padding:12px 14px;
+      border-bottom:1px solid var(--line);
+      background:#fafafa;
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+    .modal-title{ margin:0; font-size:14px; font-weight:900; }
+    .modal-sub{
+      margin:4px 0 0 0;
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.25;
+      max-width: 900px;
+    }
+    .modal-close{
+      border:1px solid #d1d5db;
+      border-radius:10px;
+      padding:8px 10px;
+      font-weight:900;
+      font-size:12px;
+      background:#fff;
+      cursor:pointer;
+      height: fit-content;
+    }
+    .modal-close:hover{ box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+
+    .modal-body{
+      padding:12px 14px 14px 14px;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+
+    .k-table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      font-size:12px;
+      border:1px solid var(--line);
+      border-radius:12px;
+      overflow:hidden;
+    }
+    .k-table thead th{
+      position:sticky;
+      top:0;
+      background:#111;
+      color:#fff;
+      padding:10px 8px;
+      text-align:left;
+      font-weight:900;
+      white-space:nowrap;
+      z-index:2;
+    }
+    .k-table tbody td{
+      border-top:1px solid var(--line);
+      padding:10px 8px;
+      vertical-align:top;
+      color:var(--ink);
+      background:#fff;
+    }
+    .k-table tbody tr:hover td{ background:#fafafa; }
+
+    footer{
+      color:#374151;
+      font-size:12px;
+      padding:8px 2px;
+      text-align:center;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <img src="logo.png" alt="Logo">
+    <div class="head-txt">
+      <h1 class="head-title">Medical Device Market Taxonomy</h1>
+      <p class="head-sub">Codes and linked 510(k)s loaded from Codes.csv and 510k.csv</p>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <section class="card">
+      <div class="topbar">
+        <div>
+          <div class="kicker">Market taxonomy explorer</div>
+          <div class="sub">
+            Filters apply to codes and to linked 510(k)s. Year sliders filter by 510(k) DecisionDate.
+            Click a code card to view its 510(k)s.
+          </div>
+          <div class="status" id="status">Loading data...</div>
+        </div>
+
+        <div class="legend" aria-label="Legend">
+          <span class="badge medcomp">Medcomp</span>
+          <span class="badge martech">Martech</span>
+          <span class="badge point">Point Medical</span>
+          <span class="badge other">Other Devices</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="grid">
+        <aside class="filters" aria-label="Filters">
+          <div class="filter-block">
+            <div class="filter-title">Company</div>
+            <div class="chiprow" id="chipCompany"></div>
+          </div>
+
+          <div class="filter-block">
+            <div class="filter-title">Search</div>
+            <input id="q" class="search" type="search" placeholder="Search code, device name, applicant, Knumber, date, state, country, notes..." />
+          </div>
+
+          <div class="filter-block">
+            <div class="filter-title">Device class</div>
+            <div class="chiprow" id="chipClass"></div>
+          </div>
+
+          <div class="filter-block">
+            <div class="filter-title">Specialty area</div>
+            <div class="chiprow" id="chipSpec"></div>
+          </div>
+
+          <div class="filter-block">
+            <div class="filter-title">
+              510(k) decision year range
+              <span id="yearHint" style="color:var(--muted); font-weight:900; font-size:12px;"></span>
+            </div>
+            <div class="range-wrap">
+              <div class="range-row">
+                <label for="yearMin">Min</label>
+                <input id="yearMin" type="range" min="2000" max="2026" step="1" value="2000">
+                <div class="range-val" id="yearMinVal">2000</div>
+              </div>
+              <div class="range-row">
+                <label for="yearMax">Max</label>
+                <input id="yearMax" type="range" min="2000" max="2026" step="1" value="2026">
+                <div class="range-val" id="yearMaxVal">2026</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn" id="btnClear">Clear filters</button>
+            <div class="count" id="count"></div>
+          </div>
+        </aside>
+
+        <main class="main" aria-label="Overview and results">
+          <div class="tiles" aria-label="Overview tiles">
+            <div class="tile">
+              <div class="tile-title">
+                <span>Codes by specialty</span>
+                <span style="color:var(--muted);" id="codesTotal"></span>
+              </div>
+              <div class="bars" id="barsCodes"></div>
+              <div class="tile-note">Counts reflect unique PRODUCTCODE values in the filtered set.</div>
+            </div>
+
+            <div class="tile">
+              <div class="tile-title">
+                <span>510(k)s by specialty</span>
+                <span style="color:var(--muted);" id="ksTotal"></span>
+              </div>
+              <div class="bars" id="barsKs"></div>
+              <div class="tile-note">Counts reflect Knumber values linked to codes in the filtered set.</div>
+            </div>
+
+            <div class="tile">
+              <div class="tile-title">
+                <span>Market size (USD)</span>
+                <span style="color:var(--muted);">TBD</span>
+              </div>
+              <div class="tile-note">
+                Placeholder for future market sizing data by code and specialty.
+              </div>
+            </div>
+          </div>
+
+          <div class="results">
+            <div class="results-head">
+              <div class="results-title">Matching device codes</div>
+              <div class="results-note">Click a code card to view linked 510(k)s.</div>
+            </div>
+            <div class="list" id="list"></div>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <footer>For internal use only</footer>
+  </div>
+
+  <div class="modal-overlay" id="modalOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Code details">
+      <div class="modal-head">
+        <div>
+          <h2 class="modal-title" id="modalTitle"></h2>
+          <p class="modal-sub" id="modalSub"></p>
+        </div>
+        <button class="modal-close" id="modalClose">Close</button>
+      </div>
+      <div class="modal-body">
+        <div id="modalInfo" class="status"></div>
+        <table class="k-table" aria-label="Linked 510k table">
+          <thead>
+            <tr>
+              <th style="width:110px;">Knumber</th>
+              <th style="width:180px;">Applicant</th>
+              <th style="width:120px;">State/Country</th>
+              <th style="width:110px;">Decision</th>
+              <th>Specific device name</th>
+              <th style="width:140px;">Company</th>
+            </tr>
+          </thead>
+          <tbody id="modalTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      // ---------
+      // Files expected in same folder as index.html on SharePoint:
+      //   Codes.csv
+      //   510k.csv
+      // ---------
+      const CODES_FILE = "./Codes.csv";
+      const KS_FILE    = "./510k.csv";
+
+      const el = {
+        status:     document.getElementById("status"),
+        chipCompany:document.getElementById("chipCompany"),
+        chipClass:  document.getElementById("chipClass"),
+        chipSpec:   document.getElementById("chipSpec"),
+        q:          document.getElementById("q"),
+        btnClear:   document.getElementById("btnClear"),
+        count:      document.getElementById("count"),
+        list:       document.getElementById("list"),
+        barsCodes:  document.getElementById("barsCodes"),
+        barsKs:     document.getElementById("barsKs"),
+        codesTotal: document.getElementById("codesTotal"),
+        ksTotal:    document.getElementById("ksTotal"),
+
+        yearMin:    document.getElementById("yearMin"),
+        yearMax:    document.getElementById("yearMax"),
+        yearMinVal: document.getElementById("yearMinVal"),
+        yearMaxVal: document.getElementById("yearMaxVal"),
+        yearHint:   document.getElementById("yearHint"),
+
+        modalOverlay: document.getElementById("modalOverlay"),
+        modalClose:   document.getElementById("modalClose"),
+        modalTitle:   document.getElementById("modalTitle"),
+        modalSub:     document.getElementById("modalSub"),
+        modalInfo:    document.getElementById("modalInfo"),
+        modalTbody:   document.getElementById("modalTbody"),
+      };
+
+      const COMPANIES = ["Medcomp","Martech","Point"];
+      const DEVICE_CLASSES = ["Class I","Class II","Class III","Unclassified"];
+
+      // Loaded data
+      let codes = [];  // rows from Codes.csv
+      let ks    = [];  // rows from 510k.csv
+
+      // Index: ProductCode -> 510k rows
+      let ksByCode = new Map();
+
+      // Derived domains
+      let specialties = [];
+      let yearDomain = { min: 2000, max: 2026 };
+
+      const state = {
+        company: new Set(),
+        deviceClass: new Set(),
+        specialty: new Set(),
+        q: "",
+        yearMin: null,
+        yearMax: null
+      };
+
+      // -----------------------
+      // CSV parsing (simple, supports quoted commas)
+      // -----------------------
+      function parseCSV(text){
+        const rows = [];
+        let i = 0, field = "", row = [], inQuotes = false;
+
+        function pushField(){
+          row.push(field);
+          field = "";
+        }
+        function pushRow(){
+          // ignore completely empty trailing row
+          if(row.length === 1 && row[0] === "") { row = []; return; }
+          rows.push(row);
+          row = [];
+        }
+
+        while(i < text.length){
+          const c = text[i];
+
+          if(inQuotes){
+            if(c === '"'){
+              const next = text[i+1];
+              if(next === '"'){ field += '"'; i += 2; continue; }
+              inQuotes = false; i++; continue;
+            }
+            field += c; i++; continue;
+          } else {
+            if(c === '"'){ inQuotes = true; i++; continue; }
+            if(c === ','){ pushField(); i++; continue; }
+            if(c === '\r'){
+              // handle CRLF or CR
+              if(text[i+1] === '\n'){ i++; }
+              pushField(); pushRow(); i++; continue;
+            }
+            if(c === '\n'){
+              pushField(); pushRow(); i++; continue;
+            }
+            field += c; i++; continue;
+          }
+        }
+        pushField();
+        pushRow();
+
+        if(rows.length === 0) return [];
+        const headers = rows[0].map(h => (h || "").trim());
+        const out = [];
+        for(let r=1; r<rows.length; r++){
+          const obj = {};
+          for(let c=0; c<headers.length; c++){
+            const key = headers[c] || ("COL" + c);
+            obj[key] = (rows[r][c] ?? "").trim();
+          }
+          out.push(obj);
+        }
+        return out;
+      }
+
+      // -----------------------
+      // Normalizers
+      // -----------------------
+      function normYesNo(v){
+        const s = (v || "").toString().trim().toLowerCase();
+        return s === "yes" || s === "y" || s === "true" || s === "1";
+      }
+
+      function normClass(v){
+        const s = (v || "").toString().trim();
+        if(!s) return "Unclassified";
+        if(s === "1" || s.toLowerCase() === "class 1") return "Class I";
+        if(s === "2" || s.toLowerCase() === "class 2") return "Class II";
+        if(s === "3" || s.toLowerCase() === "class 3") return "Class III";
+        if(DEVICE_CLASSES.includes(s)) return s;
+        return "Unclassified";
+      }
+
+      function normSpec(v){
+        const s = (v || "").toString().trim();
+        return s ? s : "Unspecified";
+      }
+
+      function safe(v){ return (v ?? "").toString().trim(); }
+
+      function parseDecisionYear(dateStr){
+        // supports: 1/11/2000, 06/05/2000, 2000-06-05, 2000/06/05
+        const s = safe(dateStr);
+        if(!s) return null;
+
+        // yyyy-mm-dd
+        const iso = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+        if(iso) return Number(iso[1]);
+
+        // m/d/yyyy
+        const md = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+        if(md) return Number(md[3]);
+
+        // fallback: first 4-digit year anywhere
+        const yr = s.match(/(19\d{2}|20\d{2})/);
+        return yr ? Number(yr[1]) : null;
+      }
+
+      function companyFlagsFromRow(r){
+        return {
+          medcomp: normYesNo(r.Medcomp),
+          martech: normYesNo(r.Martech),
+          point:   normYesNo(r.Point),
+        };
+      }
+
+      function companyLabel(flags){
+        const parts = [];
+        if(flags.medcomp) parts.push("Medcomp");
+        if(flags.martech) parts.push("Martech");
+        if(flags.point) parts.push("Point");
+        return parts.length ? parts.join(" + ") : "Other";
+      }
+
+      function anyCompany(flags){
+        return flags.medcomp || flags.martech || flags.point;
+      }
+
+      function dominantCompanyClass(flags){
+        // Used for card border emphasis if multiple flags exist:
+        if(flags.medcomp) return "medcomp";
+        if(flags.martech) return "martech";
+        if(flags.point)   return "point";
+        return "";
+      }
+
+      function toSearchTextForCode(codeRow, linkedKs){
+        const flags = companyFlagsFromRow(codeRow);
+        const brandText = [
+          flags.medcomp ? "medcomp" : "",
+          flags.martech ? "martech" : "",
+          flags.point ? "point" : ""
+        ].filter(Boolean).join(" ");
+
+        const codeParts = [
+          safe(codeRow.PRODUCTCODE),
+          safe(codeRow.DEVICENAME),
+          safe(codeRow.Specialty),
+          safe(codeRow.MEDICALSPECIALTY),
+          safe(codeRow.REVIEW_PANEL),
+          normClass(codeRow.DEVICECLASS),
+          safe(codeRow["Additional Information"]),
+          brandText
+        ];
+
+        const kParts = (linkedKs || []).flatMap(k => ([
+          safe(k.Knumber),
+          safe(k.Applicant),
+          safe(k.State),
+          safe(k.Country),
+          safe(k.DecisionDate),
+          safe(k.SpecificDeviceName),
+          safe(k.DeviceName),
+          safe(k.Specialty)
+        ]));
+
+        return (codeParts.concat(kParts)).join(" ").toLowerCase();
+      }
+
+      // -----------------------
+      // Filters
+      // -----------------------
+      function matchesCompany(flags){
+        if(state.company.size === 0) return true;
+        return (
+          (state.company.has("Medcomp") && flags.medcomp) ||
+          (state.company.has("Martech") && flags.martech) ||
+          (state.company.has("Point")   && flags.point)
+        );
+      }
+
+      function withinYearRange(k){
+        const y = k._decisionYear;
+        if(y === null) return false;
+        if(state.yearMin !== null && y < state.yearMin) return false;
+        if(state.yearMax !== null && y > state.yearMax) return false;
+        return true;
+      }
+
+      function filteredKsForCode(productCode){
+        const list = ksByCode.get(productCode) || [];
+        // Year slider applies to 510k rows directly
+        const yrOk = list.filter(withinYearRange);
+        // Company filter is based on 510k row flags if present, else falls back to code flags (later)
+        return yrOk;
+      }
+
+      function matchesClass(codeRow){
+        if(state.deviceClass.size === 0) return true;
+        const cls = normClass(codeRow.DEVICECLASS);
+        return state.deviceClass.has(cls);
+      }
+
+      function matchesSpec(codeRow){
+        if(state.specialty.size === 0) return true;
+        const spec = normSpec(codeRow.Specialty || codeRow.specialty);
+        return state.specialty.has(spec);
+      }
+
+      function matchesSearch(codeRow){
+        if(!state.q) return true;
+        const pc = safe(codeRow.PRODUCTCODE);
+        const linked = filteredKsForCode(pc);
+        const hay = toSearchTextForCode(codeRow, linked);
+        return hay.includes(state.q);
+      }
+
+      function matchesCodeRow(codeRow){
+        const flags = companyFlagsFromRow(codeRow);
+        const pc = safe(codeRow.PRODUCTCODE);
+
+        const codeCompanyOk = matchesCompany(flags);
+
+        // If company filter is set but the code row has no flags,
+        // still allow it if any linked 510k row matches the selected company flags.
+        let linkedCompanyOk = true;
+        if(state.company.size > 0 && !anyCompany(flags)){
+          const linked = filteredKsForCode(pc);
+          linkedCompanyOk = linked.some(k => matchesCompany(companyFlagsFromRow(k)));
+        }
+
+        const classOk = matchesClass(codeRow);
+        const specOk  = matchesSpec(codeRow);
+        const qOk     = matchesSearch(codeRow);
+
+        return classOk && specOk && qOk && (codeCompanyOk || linkedCompanyOk);
+      }
+
+      function filteredCodes(){
+        return codes.filter(matchesCodeRow);
+      }
+
+      function filteredKsForFilteredCodes(filteredCodeRows){
+        const set = new Set(filteredCodeRows.map(r => safe(r.PRODUCTCODE)));
+        const out = [];
+        for(const k of ks){
+          const pc = safe(k.ProductCode || k.PRODUCTCODE || k.productCode);
+          if(!set.has(pc)) continue;
+          if(!withinYearRange(k)) continue;
+
+          // company filter can apply at 510k row level too
+          const flags = companyFlagsFromRow(k);
+          if(state.company.size && !matchesCompany(flags)){
+            // allow if 510k has no company flags at all, and the code has it (handled earlier),
+            // but here we keep strict on 510k table counts: only those that match company filter OR are unflagged.
+            if(anyCompany(flags)) continue;
+          }
+          out.push(k);
+        }
+        return out;
+      }
+
+      // -----------------------
+      // UI Builders
+      // -----------------------
+      function makeChip(label, groupKey){
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "chip";
+        b.textContent = label;
+        b.addEventListener("click", () => {
+          const set = state[groupKey];
+          if(set.has(label)) set.delete(label);
+          else set.add(label);
+          render();
+        });
+        return b;
+      }
+
+      function rebuildChips(){
+        el.chipCompany.innerHTML = "";
+        el.chipClass.innerHTML = "";
+        el.chipSpec.innerHTML = "";
+
+        COMPANIES.forEach(v => el.chipCompany.appendChild(makeChip(v,"company")));
+        DEVICE_CLASSES.forEach(v => el.chipClass.appendChild(makeChip(v,"deviceClass")));
+        specialties.forEach(v => el.chipSpec.appendChild(makeChip(v,"specialty")));
+      }
+
+      function setChipActives(){
+        for(const btn of el.chipCompany.children){
+          btn.classList.toggle("active", state.company.has(btn.textContent));
+        }
+        for(const btn of el.chipClass.children){
+          btn.classList.toggle("active", state.deviceClass.has(btn.textContent));
+        }
+        for(const btn of el.chipSpec.children){
+          btn.classList.toggle("active", state.specialty.has(btn.textContent));
+        }
+      }
+
+      function topNByCount(mapObj, n){
+        const arr = Object.entries(mapObj).map(([k,v]) => ({ k, v }));
+        arr.sort((a,b) => b.v - a.v || a.k.localeCompare(b.k));
+        return arr.slice(0,n);
+      }
+
+      function renderBars(container, rows, maxVal, mode){
+        container.innerHTML = "";
+        if(rows.length === 0){
+          const d = document.createElement("div");
+          d.className = "status";
+          d.textContent = "No data for current filters.";
+          container.appendChild(d);
+          return;
+        }
+
+        rows.forEach(r => {
+          const bar = document.createElement("div");
+          bar.className = "bar";
+
+          const head = document.createElement("div");
+          head.className = "bar-head";
+
+          const lab = document.createElement("div");
+          lab.className = "bar-label";
+          lab.title = r.k;
+          lab.textContent = r.k;
+
+          const nums = document.createElement("div");
+          nums.className = "bar-nums";
+          nums.textContent = String(r.v);
+
+          head.appendChild(lab);
+          head.appendChild(nums);
+
+          const track = document.createElement("div");
+          track.className = "track";
+
+          const seg = document.createElement("div");
+          seg.className = "seg " + (mode === "codes" ? "codes" : "ks");
+          const pct = Math.max(0, Math.round((r.v / Math.max(1,maxVal)) * 100));
+          seg.style.width = pct + "%";
+
+          track.appendChild(seg);
+
+          bar.appendChild(head);
+          bar.appendChild(track);
+          container.appendChild(bar);
+        });
+      }
+
+      // -----------------------
+      // Modal
+      // -----------------------
+      function openModalForCode(codeRow){
+        const productCode = safe(codeRow.PRODUCTCODE);
+        const deviceName  = safe(codeRow.DEVICENAME);
+        const spec        = normSpec(codeRow.Specialty || codeRow.specialty);
+        const cls         = normClass(codeRow.DEVICECLASS);
+
+        const codeFlags = companyFlagsFromRow(codeRow);
+        const codeCompany = companyLabel(codeFlags);
+
+        const linkedAll = ksByCode.get(productCode) || [];
+        const linked = linkedAll.filter(withinYearRange);
+
+        // apply search + company filters to modal list too
+        const linkedFiltered = linked.filter(k => {
+          if(state.company.size){
+            const kf = companyFlagsFromRow(k);
+            if(anyCompany(kf) && !matchesCompany(kf)) return false;
+          }
+          if(state.q){
+            const hay = [
+              safe(k.Knumber),
+              safe(k.Applicant),
+              safe(k.State),
+              safe(k.Country),
+              safe(k.DecisionDate),
+              safe(k.SpecificDeviceName),
+              safe(k.DeviceName),
+              safe(k.Specialty),
+              safe(productCode),
+              safe(deviceName)
+            ].join(" ").toLowerCase();
+            if(!hay.includes(state.q)) return false;
+          }
+          return true;
+        });
+
+        el.modalTitle.textContent = (deviceName ? deviceName + " (" + productCode + ")" : ("Code " + productCode));
+        el.modalSub.textContent = "Specialty: " + spec + " | Class: " + cls + " | Company: " + codeCompany;
+
+        const note = safe(codeRow["Additional Information"]);
+        el.modalInfo.textContent = note ? ("Additional Information: " + note) : "";
+
+        el.modalTbody.innerHTML = "";
+
+        if(linkedFiltered.length === 0){
+          const tr = document.createElement("tr");
+          const td = document.createElement("td");
+          td.colSpan = 6;
+          td.className = "status";
+          td.textContent = "No linked 510(k)s match the current year range and filters.";
+          tr.appendChild(td);
+          el.modalTbody.appendChild(tr);
+        } else {
+          // sort by decision year desc then Knumber
+          linkedFiltered.sort((a,b) => {
+            const ya = a._decisionYear ?? -9999;
+            const yb = b._decisionYear ?? -9999;
+            if(yb !== ya) return yb - ya;
+            return safe(a.Knumber).localeCompare(safe(b.Knumber));
+          });
+
+          linkedFiltered.forEach(k => {
+            const tr = document.createElement("tr");
+
+            const kNum = safe(k.Knumber);
+            const applicant = safe(k.Applicant);
+            const st = safe(k.State);
+            const country = safe(k.Country);
+            const stc = (st || country) ? ((st ? st : "") + (st && country ? ", " : "") + (country ? country : "")) : "";
+            const decision = safe(k.DecisionDate);
+            const specDev = safe(k.SpecificDeviceName);
+
+            const kFlags = companyFlagsFromRow(k);
+            // If 510k row has no flags, display based on code flags
+            const displayFlags = anyCompany(kFlags) ? kFlags : codeFlags;
+
+            tr.appendChild(tdText(kNum));
+            tr.appendChild(tdText(applicant));
+            tr.appendChild(tdText(stc));
+            tr.appendChild(tdText(decision));
+            tr.appendChild(tdText(specDev));
+            tr.appendChild(tdCompanyPills(displayFlags));
+
+            el.modalTbody.appendChild(tr);
+          });
+        }
+
+        el.modalOverlay.style.display = "flex";
+        el.modalOverlay.setAttribute("aria-hidden","false");
+      }
+
+      function tdText(txt){
+        const td = document.createElement("td");
+        td.textContent = txt || "";
+        return td;
+      }
+
+      function tdCompanyPills(flags){
+        const td = document.createElement("td");
+        const wrap = document.createElement("div");
+        wrap.className = "meta";
+
+        if(flags.medcomp){
+          const p = document.createElement("span");
+          p.className = "pill medcomp";
+          p.textContent = "Medcomp";
+          wrap.appendChild(p);
+        }
+        if(flags.martech){
+          const p = document.createElement("span");
+          p.className = "pill martech";
+          p.textContent = "Martech";
+          wrap.appendChild(p);
+        }
+        if(flags.point){
+          const p = document.createElement("span");
+          p.className = "pill point";
+          p.textContent = "Point";
+          wrap.appendChild(p);
+        }
+        if(!flags.medcomp && !flags.martech && !flags.point){
+          const p = document.createElement("span");
+          p.className = "pill k";
+          p.textContent = "Other";
+          wrap.appendChild(p);
+        }
+
+        td.appendChild(wrap);
+        return td;
+      }
+
+      function closeModal(){
+        el.modalOverlay.style.display = "none";
+        el.modalOverlay.setAttribute("aria-hidden","true");
+      }
+
+      el.modalClose.addEventListener("click", closeModal);
+      el.modalOverlay.addEventListener("click", (e) => {
+        if(e.target === el.modalOverlay) closeModal();
+      });
+      document.addEventListener("keydown", (e) => {
+        if(e.key === "Escape") closeModal();
+      });
+
+      // -----------------------
+      // Main render
+      // -----------------------
+      function render(){
+        // keep year sliders consistent
+        const minY = Math.min(Number(el.yearMin.value), Number(el.yearMax.value));
+        const maxY = Math.max(Number(el.yearMin.value), Number(el.yearMax.value));
+        state.yearMin = minY;
+        state.yearMax = maxY;
+        el.yearMinVal.textContent = String(minY);
+        el.yearMaxVal.textContent = String(maxY);
+        el.yearHint.textContent = minY + " to " + maxY;
+
+        state.q = (el.q.value || "").trim().toLowerCase();
+
+        setChipActives();
+
+        const fc = filteredCodes();
+        const fk = filteredKsForFilteredCodes(fc);
+
+        // counts summary
+        const parts = [];
+        if(state.company.size) parts.push("Company: " + state.company.size);
+        if(state.deviceClass.size) parts.push("Class: " + state.deviceClass.size);
+        if(state.specialty.size) parts.push("Specialty: " + state.specialty.size);
+        parts.push("Years: " + state.yearMin + " to " + state.yearMax);
+        if(state.q) parts.push("Search: on");
+
+        el.count.textContent =
+          fc.length + " codes | " + fk.length + " 510(k)s" + (parts.length ? " | " + parts.join(" | ") : "");
+
+        // Tallies by specialty
+        const codesBySpec = {};
+        const ksBySpec = {};
+
+        // codes unique per specialty
+        fc.forEach(r => {
+          const spec = normSpec(r.Specialty || r.specialty);
+          const code = safe(r.PRODUCTCODE);
+          if(!codesBySpec[spec]) codesBySpec[spec] = new Set();
+          codesBySpec[spec].add(code);
+        });
+
+        // 510k counts per specialty, based on filtered 510k rows
+        fk.forEach(k => {
+          const spec = normSpec(k.Specialty || k.specialty);
+          ksBySpec[spec] = (ksBySpec[spec] || 0) + 1;
+        });
+
+        const codesCountMap = {};
+        Object.keys(codesBySpec).forEach(spec => codesCountMap[spec] = codesBySpec[spec].size);
+
+        // totals for tile headers
+        const totalCodes = fc.length;
+        const totalKs = fk.length;
+        el.codesTotal.textContent = totalCodes ? (totalCodes + " codes") : "";
+        el.ksTotal.textContent = totalKs ? (totalKs + " 510(k)s") : "";
+
+        const topCodes = topNByCount(codesCountMap, 12);
+        const topKs = topNByCount(ksBySpec, 12);
+
+        const maxCodes = Math.max(1, ...topCodes.map(x => x.v));
+        const maxKs = Math.max(1, ...topKs.map(x => x.v));
+
+        renderBars(el.barsCodes, topCodes, maxCodes, "codes");
+        renderBars(el.barsKs, topKs, maxKs, "ks");
+
+        // results list: sort to show Medcomp, then Martech, then Point, then others, then alphabetical
+        const sorted = fc.slice().sort((a,b) => {
+          const fa = companyFlagsFromRow(a);
+          const fb = companyFlagsFromRow(b);
+
+          const ra =
+            fa.medcomp ? 0 :
+            fa.martech ? 1 :
+            fa.point ? 2 : 3;
+
+          const rb =
+            fb.medcomp ? 0 :
+            fb.martech ? 1 :
+            fb.point ? 2 : 3;
+
+          if(ra !== rb) return ra - rb;
+
+          const an = safe(a.DEVICENAME || a.DeviceName || "");
+          const bn = safe(b.DEVICENAME || b.DeviceName || "");
+          return an.localeCompare(bn);
+        });
+
+        el.list.innerHTML = "";
+        if(sorted.length === 0){
+          const d = document.createElement("div");
+          d.className = "status";
+          d.textContent = "No codes match the current filters.";
+          el.list.appendChild(d);
+          return;
+        }
+
+        sorted.forEach(r => {
+          const pc = safe(r.PRODUCTCODE);
+          const dn = safe(r.DEVICENAME);
+          const spec = normSpec(r.Specialty || r.specialty);
+          const cls = normClass(r.DEVICECLASS);
+
+          const flags = companyFlagsFromRow(r);
+
+          // If code has no flags, but there are linked 510k flags, use those to color the card
+          let displayFlags = flags;
+          if(!anyCompany(flags)){
+            const linked = filteredKsForCode(pc);
+            const anyLinked = { medcomp:false, martech:false, point:false };
+            linked.forEach(k => {
+              const kf = companyFlagsFromRow(k);
+              anyLinked.medcomp = anyLinked.medcomp || kf.medcomp;
+              anyLinked.martech = anyLinked.martech || kf.martech;
+              anyLinked.point   = anyLinked.point   || kf.point;
+            });
+            if(anyCompany(anyLinked)) displayFlags = anyLinked;
+          }
+
+          const card = document.createElement("div");
+          card.className = "item";
+
+          const domClass = dominantCompanyClass(displayFlags);
+          if(domClass) card.classList.add(domClass);
+
+          const title = document.createElement("div");
+          title.className = "item-name";
+          title.textContent = (dn ? dn + " (" + pc + ")" : ("Code " + pc));
+
+          const meta = document.createElement("div");
+          meta.className = "meta";
+
+          const pClass = document.createElement("span");
+          pClass.className = "pill";
+          pClass.textContent = cls;
+          meta.appendChild(pClass);
+
+          const pSpec = document.createElement("span");
+          pSpec.className = "pill";
+          pSpec.textContent = spec;
+          meta.appendChild(pSpec);
+
+          if(displayFlags.medcomp){
+            const p = document.createElement("span");
+            p.className = "pill medcomp";
+            p.textContent = "Medcomp";
+            meta.appendChild(p);
+          }
+          if(displayFlags.martech){
+            const p = document.createElement("span");
+            p.className = "pill martech";
+            p.textContent = "Martech";
+            meta.appendChild(p);
+          }
+          if(displayFlags.point){
+            const p = document.createElement("span");
+            p.className = "pill point";
+            p.textContent = "Point";
+            meta.appendChild(p);
+          }
+          if(!displayFlags.medcomp && !displayFlags.martech && !displayFlags.point){
+            const p = document.createElement("span");
+            p.className = "pill k";
+            p.textContent = "Other";
+            meta.appendChild(p);
+          }
+
+          // linked 510k count (post year filter)
+          const linkedCount = (ksByCode.get(pc) || []).filter(withinYearRange).length;
+          const pK = document.createElement("span");
+          pK.className = "pill k";
+          pK.textContent = linkedCount + " 510(k)s";
+          meta.appendChild(pK);
+
+          card.appendChild(title);
+          card.appendChild(meta);
+
+          card.addEventListener("click", () => openModalForCode(r));
+
+          el.list.appendChild(card);
+        });
+      }
+
+      // -----------------------
+      // Load data
+      // -----------------------
+      async function fetchText(url){
+        const res = await fetch(url, { cache: "no-store" });
+        if(!res.ok){
+          throw new Error("Failed to load " + url + " (" + res.status + ")");
+        }
+        return await res.text();
+      }
+
+      function buildIndexes(){
+        ksByCode = new Map();
+        ks.forEach(k => {
+          // normalize key columns
+          const pc = safe(k.ProductCode || k.PRODUCTCODE || k.productCode);
+          k.ProductCode = pc;
+          k._decisionYear = parseDecisionYear(k.DecisionDate);
+
+          if(!ksByCode.has(pc)) ksByCode.set(pc, []);
+          ksByCode.get(pc).push(k);
+        });
+
+        // derive specialties from codes and ks (for chip list)
+        const set = new Set();
+        codes.forEach(r => set.add(normSpec(r.Specialty || r.specialty)));
+        ks.forEach(r => set.add(normSpec(r.Specialty || r.specialty)));
+        specialties = Array.from(set).sort((a,b) => a.localeCompare(b));
+
+        // derive year domain from ks
+        const years = ks.map(k => k._decisionYear).filter(y => typeof y === "number" && !Number.isNaN(y));
+        if(years.length){
+          yearDomain.min = Math.min(...years);
+          yearDomain.max = Math.max(...years);
+        } else {
+          yearDomain.min = 2000;
+          yearDomain.max = new Date().getFullYear();
+        }
+
+        // configure sliders to full domain
+        el.yearMin.min = String(yearDomain.min);
+        el.yearMin.max = String(yearDomain.max);
+        el.yearMax.min = String(yearDomain.min);
+        el.yearMax.max = String(yearDomain.max);
+
+        el.yearMin.value = String(yearDomain.min);
+        el.yearMax.value = String(yearDomain.max);
+
+        state.yearMin = yearDomain.min;
+        state.yearMax = yearDomain.max;
+      }
+
+      async function load(){
+        try{
+          el.status.classList.remove("error");
+          el.status.textContent = "Loading Codes.csv and 510k.csv...";
+
+          const [codesText, ksText] = await Promise.all([
+            fetchText(CODES_FILE),
+            fetchText(KS_FILE)
+          ]);
+
+          codes = parseCSV(codesText);
+          ks = parseCSV(ksText);
+
+          // normalize code row columns we rely on
+          codes.forEach(r => {
+            r.PRODUCTCODE = safe(r.PRODUCTCODE || r.ProductCode || r.productCode);
+            r.DEVICENAME = safe(r.DEVICENAME || r.DeviceName || r.devicename);
+            r.Specialty  = safe(r.Specialty || r.SPECIALTY || r.specialty);
+          });
+
+          buildIndexes();
+          rebuildChips();
+
+          // wire events
+          el.q.addEventListener("input", () => render());
+          el.yearMin.addEventListener("input", () => render());
+          el.yearMax.addEventListener("input", () => render());
+
+          el.btnClear.addEventListener("click", () => {
+            state.company.clear();
+            state.deviceClass.clear();
+            state.specialty.clear();
+            el.q.value = "";
+            el.yearMin.value = String(yearDomain.min);
+            el.yearMax.value = String(yearDomain.max);
+            render();
+          });
+
+          // initial render
+          el.status.textContent = "Loaded " + codes.length + " codes and " + ks.length + " 510(k)s.";
+          render();
+
+        } catch(err){
+          el.status.classList.add("error");
+          el.status.textContent =
+            "Could not load CSVs. This page must be opened from SharePoint (https) with Codes.csv and 510k.csv in the same folder as index.html. Error: " +
+            (err && err.message ? err.message : String(err));
+        }
+      }
+
+      // chip clicks need state sets; do after chips exist
+      function attachChipHandlers(){
+        // chips are rebuilt dynamically; easiest is to delegate with container handlers
+        el.chipCompany.addEventListener("click", (e) => {
+          if(e.target && e.target.classList.contains("chip")){
+            const label = e.target.textContent;
+            if(state.company.has(label)) state.company.delete(label);
+            else state.company.add(label);
+            render();
+          }
+        });
+        el.chipClass.addEventListener("click", (e) => {
+          if(e.target && e.target.classList.contains("chip")){
+            const label = e.target.textContent;
+            if(state.deviceClass.has(label)) state.deviceClass.delete(label);
+            else state.deviceClass.add(label);
+            render();
+          }
+        });
+        el.chipSpec.addEventListener("click", (e) => {
+          if(e.target && e.target.classList.contains("chip")){
+            const label = e.target.textContent;
+            if(state.specialty.has(label)) state.specialty.delete(label);
+            else state.specialty.add(label);
+            render();
+          }
+        });
+      }
+
+      // override rebuildChips to also attach active state correctly
+      const _rebuildChips = rebuildChips;
+      rebuildChips = function(){
+        _rebuildChips();
+        setChipActives();
+      };
+
+      attachChipHandlers();
+      load();
+    })();
+  </script>
+</body>
+</html>
