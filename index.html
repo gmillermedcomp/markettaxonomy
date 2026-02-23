@@ -557,7 +557,6 @@
         </aside>
 
         <main class="main" aria-label="Overview and results">
-          <!-- ONE combined chart (codes vs 510ks vs market size TBD) -->
           <div class="tiles" aria-label="Overview tiles">
             <div class="tile" style="grid-column: 1 / -1;">
               <div class="tile-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
@@ -623,35 +622,32 @@
   </div>
 
   <script>
-    (function(){
-      // -------------------------
-      // Expected files next to index.html:
-      //   Codes.csv
-      //   510k.csv
-      //   510k2.csv
-      // -------------------------
+    (function () {
+      // If you want to stop the harmless favicon.ico 404, add this in your <head>:
+      // <link rel="icon" href="data:,">
+
+      // GitHub Pages is case-sensitive. These must match your filenames exactly.
       const CODES_FILE = "./Codes.csv";
       const KS_FILE_1  = "./510k.csv";
       const KS_FILE_2  = "./510k2.csv";
 
       const el = {
-        status:     document.getElementById("status"),
-        chipCompany:document.getElementById("chipCompany"),
-        chipClass:  document.getElementById("chipClass"),
-        chipSpec:   document.getElementById("chipSpec"),
-        q:          document.getElementById("q"),
-        btnClear:   document.getElementById("btnClear"),
-        count:      document.getElementById("count"),
-        list:       document.getElementById("list"),
+        status:      document.getElementById("status"),
+        chipCompany: document.getElementById("chipCompany"),
+        chipClass:   document.getElementById("chipClass"),
+        chipSpec:    document.getElementById("chipSpec"),
+        q:           document.getElementById("q"),
+        btnClear:    document.getElementById("btnClear"),
+        count:       document.getElementById("count"),
+        list:        document.getElementById("list"),
+        barsCombo:   document.getElementById("barsCombo"),
+        totals:      document.getElementById("totals"),
 
-        barsCombo:  document.getElementById("barsCombo"),
-        totals:     document.getElementById("totals"),
-
-        yearMin:    document.getElementById("yearMin"),
-        yearMax:    document.getElementById("yearMax"),
-        yearMinVal: document.getElementById("yearMinVal"),
-        yearMaxVal: document.getElementById("yearMaxVal"),
-        yearHint:   document.getElementById("yearHint"),
+        yearMin:     document.getElementById("yearMin"),
+        yearMax:     document.getElementById("yearMax"),
+        yearMinVal:  document.getElementById("yearMinVal"),
+        yearMaxVal:  document.getElementById("yearMaxVal"),
+        yearHint:    document.getElementById("yearHint"),
 
         modalOverlay: document.getElementById("modalOverlay"),
         modalClose:   document.getElementById("modalClose"),
@@ -661,16 +657,15 @@
         modalTbody:   document.getElementById("modalTbody"),
       };
 
-      const COMPANIES = ["Medcomp","Martech","Point"];
-      const DEVICE_CLASSES = ["Class I","Class II","Class III","Unclassified"];
+      const COMPANIES = ["Medcomp", "Martech", "Point"];
+      const DEVICE_CLASSES = ["Class I", "Class II", "Class III", "Unclassified"];
 
-      // Loaded data
-      let codes = [];          // Codes.csv rows
-      let ksByCode = new Map(); // ProductCode -> array of 510k rows (from both files)
-
-      // Derived domains
+      let codes = [];
       let specialties = [];
-      let yearDomain = { min: 2000, max: 2026 };
+      let yearDomain = { min: 2000, max: new Date().getFullYear() };
+
+      // ProductCode -> 510k rows (from both files)
+      const ksByCode = new Map();
 
       const state = {
         company: new Set(),
@@ -681,48 +676,106 @@
         yearMax: null
       };
 
-      // -----------------------
-      // CSV parsing (simple, supports quoted commas)
-      // -----------------------
-      function parseCSV(text){
+      // Render scheduler prevents render storms
+      let renderQueued = false;
+      function requestRender() {
+        if (renderQueued) return;
+        renderQueued = true;
+        requestAnimationFrame(function () {
+          renderQueued = false;
+          render();
+        });
+      }
+
+      function safe(v) { return (v ?? "").toString().trim(); }
+
+      function normYesNo(v) {
+        const s = safe(v).toLowerCase();
+        return s === "yes" || s === "y" || s === "true" || s === "1";
+      }
+
+      function normClass(v) {
+        const s = safe(v);
+        if (!s) return "Unclassified";
+        const l = s.toLowerCase();
+        if (s === "1" || l === "class 1") return "Class I";
+        if (s === "2" || l === "class 2") return "Class II";
+        if (s === "3" || l === "class 3") return "Class III";
+        if (DEVICE_CLASSES.includes(s)) return s;
+        return "Unclassified";
+      }
+
+      function normSpec(v) {
+        const s = safe(v);
+        return s ? s : "Unspecified";
+      }
+
+      function companyFlagsFromRow(r) {
+        return {
+          medcomp: normYesNo(r.Medcomp),
+          martech: normYesNo(r.Martech),
+          point:   normYesNo(r.Point),
+        };
+      }
+
+      function anyCompany(flags) {
+        return !!(flags.medcomp || flags.martech || flags.point);
+      }
+
+      function dominantCompanyClass(flags) {
+        if (flags.medcomp) return "medcomp";
+        if (flags.martech) return "martech";
+        if (flags.point)   return "point";
+        return "";
+      }
+
+      function decisionYearFromRow(r) {
+        const y = Number(safe(r.DecisionYear));
+        return Number.isFinite(y) ? y : null;
+      }
+
+      // CSV parser: iterative, no recursion
+      function parseCSV(text) {
         const rows = [];
         let i = 0, field = "", row = [], inQuotes = false;
 
-        function pushField(){ row.push(field); field = ""; }
-        function pushRow(){
-          if(row.length === 1 && row[0] === "") { row = []; return; }
+        function pushField() { row.push(field); field = ""; }
+        function pushRow() {
+          if (row.length === 1 && row[0] === "") { row = []; return; }
           rows.push(row); row = [];
         }
 
-        while(i < text.length){
+        while (i < text.length) {
           const c = text[i];
 
-          if(inQuotes){
-            if(c === '"'){
-              const next = text[i+1];
-              if(next === '"'){ field += '"'; i += 2; continue; }
+          if (inQuotes) {
+            if (c === '"') {
+              const next = text[i + 1];
+              if (next === '"') { field += '"'; i += 2; continue; }
               inQuotes = false; i++; continue;
             }
             field += c; i++; continue;
-          } else {
-            if(c === '"'){ inQuotes = true; i++; continue; }
-            if(c === ','){ pushField(); i++; continue; }
-            if(c === '\r'){
-              if(text[i+1] === '\n'){ i++; }
-              pushField(); pushRow(); i++; continue;
-            }
-            if(c === '\n'){ pushField(); pushRow(); i++; continue; }
-            field += c; i++; continue;
           }
-        }
-        pushField(); pushRow();
 
-        if(rows.length === 0) return [];
+          if (c === '"') { inQuotes = true; i++; continue; }
+          if (c === ',') { pushField(); i++; continue; }
+          if (c === '\r') {
+            if (text[i + 1] === '\n') i++;
+            pushField(); pushRow(); i++; continue;
+          }
+          if (c === '\n') { pushField(); pushRow(); i++; continue; }
+
+          field += c; i++;
+        }
+
+        pushField(); pushRow();
+        if (rows.length === 0) return [];
+
         const headers = rows[0].map(h => (h || "").trim());
         const out = [];
-        for(let r=1; r<rows.length; r++){
+        for (let r = 1; r < rows.length; r++) {
           const obj = {};
-          for(let c=0; c<headers.length; c++){
+          for (let c = 0; c < headers.length; c++) {
             const key = headers[c] || ("COL" + c);
             obj[key] = (rows[r][c] ?? "").trim();
           }
@@ -731,99 +784,9 @@
         return out;
       }
 
-      // -----------------------
-      // Normalizers
-      // -----------------------
-      function safe(v){ return (v ?? "").toString().trim(); }
-
-      function normYesNo(v){
-        const s = safe(v).toLowerCase();
-        return s === "yes" || s === "y" || s === "true" || s === "1";
-      }
-
-      function normClass(v){
-        const s = safe(v);
-        if(!s) return "Unclassified";
-        if(s === "1" || s.toLowerCase() === "class 1") return "Class I";
-        if(s === "2" || s.toLowerCase() === "class 2") return "Class II";
-        if(s === "3" || s.toLowerCase() === "class 3") return "Class III";
-        if(DEVICE_CLASSES.includes(s)) return s;
-        return "Unclassified";
-      }
-
-      function normSpec(v){
-        const s = safe(v);
-        return s ? s : "Unspecified";
-      }
-
-      function companyFlagsFromRow(r){
-        return {
-          medcomp: normYesNo(r.Medcomp),
-          martech: normYesNo(r.Martech),
-          point:   normYesNo(r.Point),
-        };
-      }
-
-      function anyCompany(flags){
-        return flags.medcomp || flags.martech || flags.point;
-      }
-
-      function dominantCompanyClass(flags){
-        if(flags.medcomp) return "medcomp";
-        if(flags.martech) return "martech";
-        if(flags.point)   return "point";
-        return "";
-      }
-
-      // DecisionYear is now provided directly
-      function decisionYearFromRow(r){
-        const y = Number(safe(r.DecisionYear));
-        return Number.isFinite(y) ? y : null;
-      }
-
-      // -----------------------
-      // Search text building
-      // (important for speed: we compute only as needed, but keep it tight)
-      // -----------------------
-      function toSearchTextForCode(codeRow, linkedKsFiltered){
-        const flags = companyFlagsFromRow(codeRow);
-        const brandText = [
-          flags.medcomp ? "medcomp" : "",
-          flags.martech ? "martech" : "",
-          flags.point ? "point" : ""
-        ].filter(Boolean).join(" ");
-
-        const codeParts = [
-          safe(codeRow.PRODUCTCODE),
-          safe(codeRow.DEVICENAME),
-          safe(codeRow.Specialty),
-          safe(codeRow.MEDICALSPECIALTY),
-          safe(codeRow.REVIEW_PANEL),
-          normClass(codeRow.DEVICECLASS),
-          safe(codeRow["Additional Information"]),
-          brandText
-        ];
-
-        const kParts = (linkedKsFiltered || []).flatMap(k => ([
-          safe(k.Knumber),
-          safe(k.Applicant),
-          safe(k.State),
-          safe(k.Country),
-          safe(k.DecisionYear),
-          safe(k.Type),
-          safe(k.SpecificDeviceName),
-          safe(k.DeviceName),
-          safe(k.Specialty)
-        ]));
-
-        return (codeParts.concat(kParts)).join(" ").toLowerCase();
-      }
-
-      // -----------------------
-      // Filters
-      // -----------------------
-      function matchesCompany(flags){
-        if(state.company.size === 0) return true;
+      // Filtering helpers
+      function matchesCompany(flags) {
+        if (state.company.size === 0) return true;
         return (
           (state.company.has("Medcomp") && flags.medcomp) ||
           (state.company.has("Martech") && flags.martech) ||
@@ -831,156 +794,190 @@
         );
       }
 
-      function withinYearRange(k){
+      function withinYearRange(k) {
         const y = k._decisionYear;
-        if(y === null) return false;
-        if(state.yearMin !== null && y < state.yearMin) return false;
-        if(state.yearMax !== null && y > state.yearMax) return false;
+        if (y === null) return false;
+        if (state.yearMin !== null && y < state.yearMin) return false;
+        if (state.yearMax !== null && y > state.yearMax) return false;
         return true;
       }
 
-      function filteredKsForCode(productCode){
+      function filteredKsForCode(productCode) {
         const list = ksByCode.get(productCode) || [];
-        // Year slider applies to 510k rows directly
-        return list.filter(withinYearRange);
+        const out = [];
+        for (let i = 0; i < list.length; i++) {
+          const k = list[i];
+          if (!withinYearRange(k)) continue;
+          if (state.company.size && !matchesCompany(companyFlagsFromRow(k))) continue;
+          out.push(k);
+        }
+        return out;
       }
 
-      function matchesClass(codeRow){
-        if(state.deviceClass.size === 0) return true;
+      // Search: fast and stable.
+      // We DO NOT concatenate every linked 510k row into a mega-string per code, per keystroke.
+      // Instead: search code fields always, and for 510k fields scan only the linked list when needed.
+      function matchesSearch(codeRow) {
+        const q = state.q;
+        if (!q) return true;
+
+        const codeHay = [
+          safe(codeRow.PRODUCTCODE),
+          safe(codeRow.DEVICENAME),
+          safe(codeRow.Specialty),
+          safe(codeRow.MEDICALSPECIALTY),
+          safe(codeRow.REVIEW_PANEL),
+          normClass(codeRow.DEVICECLASS),
+          safe(codeRow["Additional Information"]),
+        ].join(" ").toLowerCase();
+
+        if (codeHay.includes(q)) return true;
+
+        const pc = safe(codeRow.PRODUCTCODE);
+        const linked = filteredKsForCode(pc);
+        for (let i = 0; i < linked.length; i++) {
+          const k = linked[i];
+          const kHay = [
+            safe(k.Knumber),
+            safe(k.Applicant),
+            safe(k.State),
+            safe(k.Country),
+            safe(k.DecisionYear),
+            safe(k.Type),
+            safe(k.SpecificDeviceName),
+            safe(k.DeviceName),
+            safe(k.Specialty),
+          ].join(" ").toLowerCase();
+          if (kHay.includes(q)) return true;
+        }
+        return false;
+      }
+
+      function matchesClass(codeRow) {
+        if (state.deviceClass.size === 0) return true;
         return state.deviceClass.has(normClass(codeRow.DEVICECLASS));
       }
 
-      function matchesSpec(codeRow){
-        if(state.specialty.size === 0) return true;
+      function matchesSpec(codeRow) {
+        if (state.specialty.size === 0) return true;
         return state.specialty.has(normSpec(codeRow.Specialty || codeRow.specialty));
       }
 
-      function matchesSearch(codeRow){
-        if(!state.q) return true;
-        const pc = safe(codeRow.PRODUCTCODE);
-        const linked = filteredKsForCode(pc);
-        const hay = toSearchTextForCode(codeRow, linked);
-        return hay.includes(state.q);
-      }
-
-      function matchesCodeRow(codeRow){
-        const flags = companyFlagsFromRow(codeRow);
+      function matchesCodeRow(codeRow) {
         const pc = safe(codeRow.PRODUCTCODE);
 
-        const classOk = matchesClass(codeRow);
-        const specOk  = matchesSpec(codeRow);
-        const qOk     = matchesSearch(codeRow);
+        if (!matchesClass(codeRow)) return false;
+        if (!matchesSpec(codeRow)) return false;
+        if (!matchesSearch(codeRow)) return false;
 
-        // company filter: allow match via code OR via any linked 510k
-        let companyOk = true;
-        if(state.company.size){
-          companyOk = matchesCompany(flags);
-          if(!companyOk){
-            const linked = filteredKsForCode(pc);
-            companyOk = linked.some(k => matchesCompany(companyFlagsFromRow(k)));
+        if (state.company.size) {
+          const flags = companyFlagsFromRow(codeRow);
+          if (matchesCompany(flags)) return true;
+
+          // allow match via linked 510ks too
+          const linked = filteredKsForCode(pc);
+          for (let i = 0; i < linked.length; i++) {
+            if (matchesCompany(companyFlagsFromRow(linked[i]))) return true;
           }
+          return false;
         }
 
-        return classOk && specOk && qOk && companyOk;
+        return true;
       }
 
-      function filteredCodes(){
-        return codes.filter(matchesCodeRow);
-      }
-
-      function filteredKsForFilteredCodes(filteredCodeRows){
-        const set = new Set(filteredCodeRows.map(r => safe(r.PRODUCTCODE)));
+      function filteredCodes() {
         const out = [];
-        for(const [pc, list] of ksByCode.entries()){
-          if(!set.has(pc)) continue;
-          for(const k of list){
-            if(!withinYearRange(k)) continue;
+        for (let i = 0; i < codes.length; i++) {
+          const r = codes[i];
+          if (matchesCodeRow(r)) out.push(r);
+        }
+        return out;
+      }
 
-            if(state.company.size){
-              const kf = companyFlagsFromRow(k);
-              // If company filter is selected, count only 510ks that match it
-              if(!matchesCompany(kf)) continue;
-            }
+      function filteredKsForFilteredCodes(filteredCodeRows) {
+        const set = new Set(filteredCodeRows.map(r => safe(r.PRODUCTCODE)));
+        let count = 0;
+
+        // We only need counts and per-specialty aggregation in render, but the modal needs rows.
+        // Here we return the rows for counting by specialty as the UI expects it.
+        const out = [];
+        for (const [pc, list] of ksByCode.entries()) {
+          if (!set.has(pc)) continue;
+
+          for (let i = 0; i < list.length; i++) {
+            const k = list[i];
+            if (!withinYearRange(k)) continue;
+            if (state.company.size && !matchesCompany(companyFlagsFromRow(k))) continue;
             out.push(k);
+            count++;
           }
         }
         return out;
       }
 
-      // -----------------------
-// Chip UI (safe, no recursion, no double handlers)
-// -----------------------
-function makeChip(label){
-  const b = document.createElement("button");
-  b.type = "button";
-  b.className = "chip";
-  b.textContent = label;
-  return b;
-}
+      // Chips (single delegation, attached once)
+      function makeChip(label) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "chip";
+        b.textContent = label;
+        return b;
+      }
 
-function rebuildChips(){
-  el.chipCompany.innerHTML = "";
-  el.chipClass.innerHTML = "";
-  el.chipSpec.innerHTML = "";
+      function setChipActives() {
+        for (const btn of el.chipCompany.children) btn.classList.toggle("active", state.company.has(btn.textContent));
+        for (const btn of el.chipClass.children)   btn.classList.toggle("active", state.deviceClass.has(btn.textContent));
+        for (const btn of el.chipSpec.children)    btn.classList.toggle("active", state.specialty.has(btn.textContent));
+      }
 
-  for(const v of COMPANIES) el.chipCompany.appendChild(makeChip(v));
-  for(const v of DEVICE_CLASSES) el.chipClass.appendChild(makeChip(v));
-  for(const v of specialties) el.chipSpec.appendChild(makeChip(v));
+      function rebuildChips() {
+        el.chipCompany.innerHTML = "";
+        el.chipClass.innerHTML = "";
+        el.chipSpec.innerHTML = "";
 
-  setChipActives();
-}
+        for (const v of COMPANIES) el.chipCompany.appendChild(makeChip(v));
+        for (const v of DEVICE_CLASSES) el.chipClass.appendChild(makeChip(v));
+        for (const v of specialties) el.chipSpec.appendChild(makeChip(v));
 
-function setChipActives(){
-  for(const btn of el.chipCompany.children){
-    btn.classList.toggle("active", state.company.has(btn.textContent));
-  }
-  for(const btn of el.chipClass.children){
-    btn.classList.toggle("active", state.deviceClass.has(btn.textContent));
-  }
-  for(const btn of el.chipSpec.children){
-    btn.classList.toggle("active", state.specialty.has(btn.textContent));
-  }
-}
+        setChipActives();
+      }
 
-function toggleFromContainer(containerEl, setRef){
-  containerEl.addEventListener("click", (e) => {
-    const t = e.target;
-    if(!t || !t.classList || !t.classList.contains("chip")) return;
-    const label = t.textContent;
-    if(setRef.has(label)) setRef.delete(label);
-    else setRef.add(label);
-    render();
-  });
-}
+      function toggleFromContainer(containerEl, setRef) {
+        containerEl.addEventListener("click", function (e) {
+          const t = e.target;
+          if (!t || !t.classList || !t.classList.contains("chip")) return;
+          const label = t.textContent;
+          if (setRef.has(label)) setRef.delete(label);
+          else setRef.add(label);
+          requestRender();
+        });
+      }
 
-// Call exactly once, near the bottom, before load()
-toggleFromContainer(el.chipCompany, state.company);
-toggleFromContainer(el.chipClass, state.deviceClass);
-toggleFromContainer(el.chipSpec, state.specialty);
+      toggleFromContainer(el.chipCompany, state.company);
+      toggleFromContainer(el.chipClass, state.deviceClass);
+      toggleFromContainer(el.chipSpec, state.specialty);
 
-      // -----------------------
-      // Combined bars (one big window)
-      // -----------------------
-      function topNByMax(codesMap, ksMap, n){
+      // Combined bars
+      function topNByMax(codesMap, ksMap, n) {
         const keys = new Set([...Object.keys(codesMap), ...Object.keys(ksMap)]);
         const arr = Array.from(keys).map(k => ({
           k,
           codes: codesMap[k] || 0,
           ks: ksMap[k] || 0,
-          market: 0 // placeholder until you add data
+          market: 0
         }));
-        arr.sort((a,b) => {
+        arr.sort((a, b) => {
           const ma = Math.max(a.codes, a.ks, a.market);
           const mb = Math.max(b.codes, b.ks, b.market);
           return (mb - ma) || a.k.localeCompare(b.k);
         });
-        return arr.slice(0,n);
+        return arr.slice(0, n);
       }
 
-      function renderComboBars(container, rows){
+      function renderComboBars(container, rows) {
         container.innerHTML = "";
 
-        if(rows.length === 0){
+        if (rows.length === 0) {
           const d = document.createElement("div");
           d.className = "status";
           d.textContent = "No data for current filters.";
@@ -990,9 +987,11 @@ toggleFromContainer(el.chipSpec, state.specialty);
 
         const maxCodes = Math.max(1, ...rows.map(r => r.codes));
         const maxKs    = Math.max(1, ...rows.map(r => r.ks));
-        const maxMkt   = Math.max(1, ...rows.map(r => r.market)); // currently all 0 -> max 1
+        const maxMkt   = 1;
 
-        rows.forEach(r => {
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i];
+
           const bar = document.createElement("div");
           bar.className = "bar";
 
@@ -1013,35 +1012,28 @@ toggleFromContainer(el.chipSpec, state.specialty);
 
           const track = document.createElement("div");
           track.className = "track";
-          track.style.position = "relative";
+          track.style.display = "flex";
+          track.style.flexDirection = "column";
+          track.style.gap = "4px";
 
-          // Red segment (codes) scaled to its own max, but visually stacked in one track.
           const segCodes = document.createElement("div");
           segCodes.className = "seg";
+          segCodes.style.height = "10px";
           segCodes.style.width = Math.round((r.codes / maxCodes) * 100) + "%";
           segCodes.style.background = "#D32F2F";
 
           const segKs = document.createElement("div");
           segKs.className = "seg";
+          segKs.style.height = "10px";
           segKs.style.width = Math.round((r.ks / maxKs) * 100) + "%";
           segKs.style.background = "#1976D2";
-          segKs.style.marginTop = "6px";
 
           const segMkt = document.createElement("div");
           segMkt.className = "seg";
+          segMkt.style.height = "10px";
           segMkt.style.width = Math.round((r.market / maxMkt) * 100) + "%";
           segMkt.style.background = "#2E7D32";
-          segMkt.style.marginTop = "6px";
           segMkt.style.opacity = "0.6";
-
-          track.style.display = "flex";
-          track.style.flexDirection = "column";
-          track.style.gap = "4px";
-
-          // each "seg" becomes its own thin line inside the same window
-          segCodes.style.height = "10px";
-          segKs.style.height = "10px";
-          segMkt.style.height = "10px";
 
           track.appendChild(segCodes);
           track.appendChild(segKs);
@@ -1050,42 +1042,26 @@ toggleFromContainer(el.chipSpec, state.specialty);
           bar.appendChild(head);
           bar.appendChild(track);
           container.appendChild(bar);
-        });
+        }
       }
 
-      // -----------------------
       // Modal
-      // -----------------------
-      function tdText(txt){
+      function tdText(txt) {
         const td = document.createElement("td");
         td.textContent = txt || "";
         return td;
       }
 
-      function tdCompanyPills(flags){
+      function tdCompanyPills(flags) {
         const td = document.createElement("td");
         const wrap = document.createElement("div");
         wrap.className = "meta";
 
-        if(flags.medcomp){
-          const p = document.createElement("span");
-          p.className = "pill medcomp";
-          p.textContent = "Medcomp";
-          wrap.appendChild(p);
-        }
-        if(flags.martech){
-          const p = document.createElement("span");
-          p.className = "pill martech";
-          p.textContent = "Martech";
-          wrap.appendChild(p);
-        }
-        if(flags.point){
-          const p = document.createElement("span");
-          p.className = "pill point";
-          p.textContent = "Point";
-          wrap.appendChild(p);
-        }
-        if(!flags.medcomp && !flags.martech && !flags.point){
+        if (flags.medcomp) { const p = document.createElement("span"); p.className = "pill medcomp"; p.textContent = "Medcomp"; wrap.appendChild(p); }
+        if (flags.martech) { const p = document.createElement("span"); p.className = "pill martech"; p.textContent = "Martech"; wrap.appendChild(p); }
+        if (flags.point)   { const p = document.createElement("span"); p.className = "pill point"; p.textContent = "Point"; wrap.appendChild(p); }
+
+        if (!flags.medcomp && !flags.martech && !flags.point) {
           const p = document.createElement("span");
           p.className = "pill k";
           p.textContent = "Other";
@@ -1096,48 +1072,36 @@ toggleFromContainer(el.chipSpec, state.specialty);
         return td;
       }
 
-      function openModalForCode(codeRow){
+      function openModalForCode(codeRow) {
         const productCode = safe(codeRow.PRODUCTCODE);
         const deviceName  = safe(codeRow.DEVICENAME);
         const spec        = normSpec(codeRow.Specialty || codeRow.specialty);
         const cls         = normClass(codeRow.DEVICECLASS);
 
-        el.modalTitle.textContent = (deviceName ? deviceName + " (" + productCode + ")" : ("Code " + productCode));
+        el.modalTitle.textContent = deviceName ? (deviceName + " (" + productCode + ")") : ("Code " + productCode);
         el.modalSub.textContent = "Specialty: " + spec + " | Class: " + cls;
 
         const note = safe(codeRow["Additional Information"]);
         el.modalInfo.textContent = note ? ("Additional Information: " + note) : "";
 
-        const linkedAll = ksByCode.get(productCode) || [];
-        let linked = linkedAll.filter(withinYearRange);
+        let linked = filteredKsForCode(productCode);
 
-        // apply search + company filters to modal list too
-        linked = linked.filter(k => {
-          if(state.company.size){
-            if(!matchesCompany(companyFlagsFromRow(k))) return false;
-          }
-          if(state.q){
+        // Apply search again in modal if needed (keeps modal consistent with main search box)
+        if (state.q) {
+          const q = state.q;
+          linked = linked.filter(k => {
             const hay = [
-              safe(k.Knumber),
-              safe(k.Applicant),
-              safe(k.State),
-              safe(k.Country),
-              safe(k.DecisionYear),
-              safe(k.Type),
-              safe(k.SpecificDeviceName),
-              safe(k.DeviceName),
-              safe(k.Specialty),
-              productCode,
-              deviceName
+              safe(k.Knumber), safe(k.Applicant), safe(k.State), safe(k.Country),
+              safe(k.DecisionYear), safe(k.Type), safe(k.SpecificDeviceName),
+              safe(k.DeviceName), safe(k.Specialty)
             ].join(" ").toLowerCase();
-            if(!hay.includes(state.q)) return false;
-          }
-          return true;
-        });
+            return hay.includes(q);
+          });
+        }
 
         el.modalTbody.innerHTML = "";
 
-        if(linked.length === 0){
+        if (linked.length === 0) {
           const tr = document.createElement("tr");
           const td = document.createElement("td");
           td.colSpan = 7;
@@ -1146,128 +1110,114 @@ toggleFromContainer(el.chipSpec, state.specialty);
           tr.appendChild(td);
           el.modalTbody.appendChild(tr);
         } else {
-          // sort by year desc then Knumber
-          linked.sort((a,b) => {
+          linked.sort((a, b) => {
             const ya = a._decisionYear ?? -9999;
             const yb = b._decisionYear ?? -9999;
-            if(yb !== ya) return yb - ya;
+            if (yb !== ya) return yb - ya;
             return safe(a.Knumber).localeCompare(safe(b.Knumber));
           });
 
-          linked.forEach(k => {
+          for (let i = 0; i < linked.length; i++) {
+            const k = linked[i];
             const tr = document.createElement("tr");
 
-            const kNum = safe(k.Knumber);
-            const applicant = safe(k.Applicant);
             const st = safe(k.State);
             const country = safe(k.Country);
             const stc = (st || country) ? ((st ? st : "") + (st && country ? ", " : "") + (country ? country : "")) : "";
+
             const year = (k._decisionYear !== null) ? String(k._decisionYear) : "";
-            const type = safe(k.Type);
-            const specDev = safe(k.SpecificDeviceName);
 
-            // IMPORTANT FIX: company pills come ONLY from the 510k row
-            const kFlags = companyFlagsFromRow(k);
-
-            tr.appendChild(tdText(kNum));
-            tr.appendChild(tdText(applicant));
+            tr.appendChild(tdText(safe(k.Knumber)));
+            tr.appendChild(tdText(safe(k.Applicant)));
             tr.appendChild(tdText(stc));
             tr.appendChild(tdText(year));
-            tr.appendChild(tdText(type));
-            tr.appendChild(tdText(specDev));
-            tr.appendChild(tdCompanyPills(kFlags));
+            tr.appendChild(tdText(safe(k.Type)));
+            tr.appendChild(tdText(safe(k.SpecificDeviceName)));
+
+            // Company in modal comes ONLY from 510k rows
+            tr.appendChild(tdCompanyPills(companyFlagsFromRow(k)));
 
             el.modalTbody.appendChild(tr);
-          });
+          }
         }
 
         el.modalOverlay.style.display = "flex";
-        el.modalOverlay.setAttribute("aria-hidden","false");
+        el.modalOverlay.setAttribute("aria-hidden", "false");
       }
 
-      function closeModal(){
+      function closeModal() {
         el.modalOverlay.style.display = "none";
-        el.modalOverlay.setAttribute("aria-hidden","true");
+        el.modalOverlay.setAttribute("aria-hidden", "true");
       }
 
       el.modalClose.addEventListener("click", closeModal);
-      el.modalOverlay.addEventListener("click", (e) => {
-        if(e.target === el.modalOverlay) closeModal();
+      el.modalOverlay.addEventListener("click", function (e) {
+        if (e.target === el.modalOverlay) closeModal();
       });
-      document.addEventListener("keydown", (e) => {
-        if(e.key === "Escape") closeModal();
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") closeModal();
       });
 
-      // -----------------------
       // Main render
-      // -----------------------
-      function render(){
-        // year range
+      function render() {
         const minY = Math.min(Number(el.yearMin.value), Number(el.yearMax.value));
         const maxY = Math.max(Number(el.yearMin.value), Number(el.yearMax.value));
         state.yearMin = minY;
         state.yearMax = maxY;
+
         el.yearMinVal.textContent = String(minY);
         el.yearMaxVal.textContent = String(maxY);
         el.yearHint.textContent = minY + " to " + maxY;
 
         state.q = (el.q.value || "").trim().toLowerCase();
+
         setChipActives();
 
         const fc = filteredCodes();
         const fk = filteredKsForFilteredCodes(fc);
 
-        // counts summary
         const parts = [];
-        if(state.company.size) parts.push("Company: " + state.company.size);
-        if(state.deviceClass.size) parts.push("Class: " + state.deviceClass.size);
-        if(state.specialty.size) parts.push("Specialty: " + state.specialty.size);
+        if (state.company.size) parts.push("Company: " + state.company.size);
+        if (state.deviceClass.size) parts.push("Class: " + state.deviceClass.size);
+        if (state.specialty.size) parts.push("Specialty: " + state.specialty.size);
         parts.push("Years: " + state.yearMin + " to " + state.yearMax);
-        if(state.q) parts.push("Search: on");
+        if (state.q) parts.push("Search: on");
 
-        el.count.textContent =
-          fc.length + " codes | " + fk.length + " 510(k)s" + (parts.length ? " | " + parts.join(" | ") : "");
+        el.count.textContent = fc.length + " codes | " + fk.length + " 510(k)s" + (parts.length ? " | " + parts.join(" | ") : "");
+        el.totals.textContent = fc.length + " codes, " + fk.length + " 510(k)s";
 
-        el.totals.textContent = (fc.length + " codes, " + fk.length + " 510(k)s");
-
-        // Tallies by specialty
         const codesBySpec = {}; // spec -> Set(productcode)
         const ksBySpec = {};    // spec -> count
 
-        fc.forEach(r => {
+        for (let i = 0; i < fc.length; i++) {
+          const r = fc[i];
           const spec = normSpec(r.Specialty || r.specialty);
           const code = safe(r.PRODUCTCODE);
-          if(!codesBySpec[spec]) codesBySpec[spec] = new Set();
+          if (!codesBySpec[spec]) codesBySpec[spec] = new Set();
           codesBySpec[spec].add(code);
-        });
+        }
 
-        fk.forEach(k => {
+        for (let i = 0; i < fk.length; i++) {
+          const k = fk[i];
           const spec = normSpec(k.Specialty || k.specialty);
           ksBySpec[spec] = (ksBySpec[spec] || 0) + 1;
-        });
+        }
 
         const codesCountMap = {};
-        Object.keys(codesBySpec).forEach(spec => codesCountMap[spec] = codesBySpec[spec].size);
+        for (const spec in codesBySpec) codesCountMap[spec] = codesBySpec[spec].size;
 
         const rows = topNByMax(codesCountMap, ksBySpec, 14);
         renderComboBars(el.barsCombo, rows);
 
-        // results list sorting
-        const sorted = fc.slice().sort((a,b) => {
+        // Results list
+        const sorted = fc.slice().sort((a, b) => {
           const fa = companyFlagsFromRow(a);
           const fb = companyFlagsFromRow(b);
 
-          const ra =
-            fa.medcomp ? 0 :
-            fa.martech ? 1 :
-            fa.point ? 2 : 3;
+          const ra = fa.medcomp ? 0 : fa.martech ? 1 : fa.point ? 2 : 3;
+          const rb = fb.medcomp ? 0 : fb.martech ? 1 : fb.point ? 2 : 3;
 
-          const rb =
-            fb.medcomp ? 0 :
-            fb.martech ? 1 :
-            fb.point ? 2 : 3;
-
-          if(ra !== rb) return ra - rb;
+          if (ra !== rb) return ra - rb;
 
           const an = safe(a.DEVICENAME || a.DeviceName || "");
           const bn = safe(b.DEVICENAME || b.DeviceName || "");
@@ -1275,7 +1225,7 @@ toggleFromContainer(el.chipSpec, state.specialty);
         });
 
         el.list.innerHTML = "";
-        if(sorted.length === 0){
+        if (sorted.length === 0) {
           const d = document.createElement("div");
           d.className = "status";
           d.textContent = "No codes match the current filters.";
@@ -1283,37 +1233,36 @@ toggleFromContainer(el.chipSpec, state.specialty);
           return;
         }
 
-        sorted.forEach(r => {
+        for (let i = 0; i < sorted.length; i++) {
+          const r = sorted[i];
           const pc = safe(r.PRODUCTCODE);
           const dn = safe(r.DEVICENAME);
           const spec = normSpec(r.Specialty || r.specialty);
           const cls = normClass(r.DEVICECLASS);
 
-          // Card color preference:
-          //  - If Codes.csv has flags, use them.
-          //  - Otherwise, infer from any linked 510k flags (within year filter).
+          // Card color:
+          // Prefer Codes.csv flags. If none, infer from linked 510ks (within current filters).
           let displayFlags = companyFlagsFromRow(r);
-          if(!anyCompany(displayFlags)){
+          if (!anyCompany(displayFlags)) {
             const linked = filteredKsForCode(pc);
-            const inferred = { medcomp:false, martech:false, point:false };
-            linked.forEach(k => {
-              const kf = companyFlagsFromRow(k);
+            const inferred = { medcomp: false, martech: false, point: false };
+            for (let j = 0; j < linked.length; j++) {
+              const kf = companyFlagsFromRow(linked[j]);
               inferred.medcomp = inferred.medcomp || kf.medcomp;
               inferred.martech = inferred.martech || kf.martech;
               inferred.point   = inferred.point   || kf.point;
-            });
-            if(anyCompany(inferred)) displayFlags = inferred;
+            }
+            if (anyCompany(inferred)) displayFlags = inferred;
           }
 
           const card = document.createElement("div");
           card.className = "item";
-
           const domClass = dominantCompanyClass(displayFlags);
-          if(domClass) card.classList.add(domClass);
+          if (domClass) card.classList.add(domClass);
 
           const title = document.createElement("div");
           title.className = "item-name";
-          title.textContent = (dn ? dn + " (" + pc + ")" : ("Code " + pc));
+          title.textContent = dn ? (dn + " (" + pc + ")") : ("Code " + pc);
 
           const meta = document.createElement("div");
           meta.className = "meta";
@@ -1328,32 +1277,17 @@ toggleFromContainer(el.chipSpec, state.specialty);
           pSpec.textContent = spec;
           meta.appendChild(pSpec);
 
-          if(displayFlags.medcomp){
-            const p = document.createElement("span");
-            p.className = "pill medcomp";
-            p.textContent = "Medcomp";
-            meta.appendChild(p);
-          }
-          if(displayFlags.martech){
-            const p = document.createElement("span");
-            p.className = "pill martech";
-            p.textContent = "Martech";
-            meta.appendChild(p);
-          }
-          if(displayFlags.point){
-            const p = document.createElement("span");
-            p.className = "pill point";
-            p.textContent = "Point";
-            meta.appendChild(p);
-          }
-          if(!displayFlags.medcomp && !displayFlags.martech && !displayFlags.point){
+          if (displayFlags.medcomp) { const p = document.createElement("span"); p.className = "pill medcomp"; p.textContent = "Medcomp"; meta.appendChild(p); }
+          if (displayFlags.martech) { const p = document.createElement("span"); p.className = "pill martech"; p.textContent = "Martech"; meta.appendChild(p); }
+          if (displayFlags.point)   { const p = document.createElement("span"); p.className = "pill point"; p.textContent = "Point"; meta.appendChild(p); }
+          if (!displayFlags.medcomp && !displayFlags.martech && !displayFlags.point) {
             const p = document.createElement("span");
             p.className = "pill k";
             p.textContent = "Other";
             meta.appendChild(p);
           }
 
-          const linkedCount = (ksByCode.get(pc) || []).filter(withinYearRange).length;
+          const linkedCount = filteredKsForCode(pc).length;
           const pK = document.createElement("span");
           pK.className = "pill k";
           pK.textContent = linkedCount + " 510(k)s";
@@ -1361,59 +1295,55 @@ toggleFromContainer(el.chipSpec, state.specialty);
 
           card.appendChild(title);
           card.appendChild(meta);
+          card.addEventListener("click", function () { openModalForCode(r); });
 
-          card.addEventListener("click", () => openModalForCode(r));
           el.list.appendChild(card);
-        });
+        }
       }
 
-      // -----------------------
-      // Load data (speed improvements that matter most)
-      // 1) Load both 510k files in parallel, then merge.
-      // 2) Build ksByCode index immediately, do NOT keep a giant ks[] array.
-      // -----------------------
-      async function fetchText(url){
-        const res = await fetch(url, { cache: "force-cache" });
-        if(!res.ok) throw new Error("Failed to load " + url + " (" + res.status + ")");
+      async function fetchText(url) {
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error("Failed to load " + url + " (" + res.status + ")");
         return await res.text();
       }
 
-      function indexKs(rows){
-        for(const k of rows){
-          const pc = safe(k.ProductCode || k.PRODUCTCODE || k.productCode || k.ProductCode);
+      function indexKs(rows) {
+        for (let i = 0; i < rows.length; i++) {
+          const k = rows[i];
+          const pc = safe(k.ProductCode || k.PRODUCTCODE || k.productCode);
           k.ProductCode = pc;
 
           k._decisionYear = decisionYearFromRow(k);
+          if (k._decisionYear === null) continue; // DecisionYear is required for filtering
 
-          if(!ksByCode.has(pc)) ksByCode.set(pc, []);
+          if (!ksByCode.has(pc)) ksByCode.set(pc, []);
           ksByCode.get(pc).push(k);
         }
       }
 
-      function buildDomains(){
-        // specialties from codes + 510ks
-        const set = new Set();
-        codes.forEach(r => set.add(normSpec(r.Specialty || r.specialty)));
-
+      function buildDomains() {
+        const specSet = new Set();
         const years = [];
-        for(const list of ksByCode.values()){
-          for(const k of list){
-            set.add(normSpec(k.Specialty || k.specialty));
-            if(typeof k._decisionYear === "number") years.push(k._decisionYear);
+
+        for (let i = 0; i < codes.length; i++) {
+          const r = codes[i];
+          specSet.add(normSpec(r.Specialty || r.specialty));
+        }
+
+        for (const list of ksByCode.values()) {
+          for (let i = 0; i < list.length; i++) {
+            const k = list[i];
+            specSet.add(normSpec(k.Specialty || k.specialty));
+            years.push(k._decisionYear);
           }
         }
 
-        specialties = Array.from(set).sort((a,b) => a.localeCompare(b));
-
-        if(years.length){
+        specialties = Array.from(specSet).sort((a, b) => a.localeCompare(b));
+        if (years.length) {
           yearDomain.min = Math.min(...years);
           yearDomain.max = Math.max(...years);
-        } else {
-          yearDomain.min = 2000;
-          yearDomain.max = new Date().getFullYear();
         }
 
-        // configure sliders
         el.yearMin.min = String(yearDomain.min);
         el.yearMin.max = String(yearDomain.max);
         el.yearMax.min = String(yearDomain.min);
@@ -1426,12 +1356,11 @@ toggleFromContainer(el.chipSpec, state.specialty);
         state.yearMax = yearDomain.max;
       }
 
-      async function load(){
-        try{
+      async function load() {
+        try {
           el.status.classList.remove("error");
           el.status.textContent = "Loading CSVs...";
 
-          // Fetch in parallel
           const [codesText, ks1Text, ks2Text] = await Promise.all([
             fetchText(CODES_FILE),
             fetchText(KS_FILE_1),
@@ -1441,58 +1370,51 @@ toggleFromContainer(el.chipSpec, state.specialty);
           el.status.textContent = "Parsing Codes.csv...";
           codes = parseCSV(codesText);
 
-          // Normalize code rows
-          codes.forEach(r => {
+          // normalize code rows
+          for (let i = 0; i < codes.length; i++) {
+            const r = codes[i];
             r.PRODUCTCODE = safe(r.PRODUCTCODE || r.ProductCode || r.productCode);
             r.DEVICENAME  = safe(r.DEVICENAME || r.DeviceName || r.devicename);
             r.Specialty   = safe(r.Specialty || r.SPECIALTY || r.specialty);
-          });
+          }
 
-          // Parse and index 510k rows (do not keep a giant combined array)
           el.status.textContent = "Parsing 510k.csv...";
-          const ks1 = parseCSV(ks1Text);
-          indexKs(ks1);
+          indexKs(parseCSV(ks1Text));
 
           el.status.textContent = "Parsing 510k2.csv...";
-          const ks2 = parseCSV(ks2Text);
-          indexKs(ks2);
+          indexKs(parseCSV(ks2Text));
 
           buildDomains();
           rebuildChips();
 
-          // wire events
-          el.q.addEventListener("input", render);
-          el.yearMin.addEventListener("input", render);
-          el.yearMax.addEventListener("input", render);
+          el.q.addEventListener("input", requestRender);
+          el.yearMin.addEventListener("input", requestRender);
+          el.yearMax.addEventListener("input", requestRender);
 
-          el.btnClear.addEventListener("click", () => {
+          el.btnClear.addEventListener("click", function () {
             state.company.clear();
             state.deviceClass.clear();
             state.specialty.clear();
             el.q.value = "";
             el.yearMin.value = String(yearDomain.min);
             el.yearMax.value = String(yearDomain.max);
-            render();
+            requestRender();
           });
 
-          // initial render
-          // rough counts without traversing everything twice
           let kCount = 0;
-          for(const list of ksByCode.values()) kCount += list.length;
+          for (const list of ksByCode.values()) kCount += list.length;
 
-          el.status.textContent =
-            "Loaded " + codes.length + " codes and " + kCount + " 510(k)s (from 2 files).";
-          render();
-
-        } catch(err){
+          el.status.textContent = "Loaded " + codes.length + " codes and " + kCount + " 510(k)s (from 2 files).";
+          requestRender();
+        } catch (err) {
           el.status.classList.add("error");
           el.status.textContent =
-            "Could not load CSVs. Make sure Codes.csv, 510k.csv, and 510k2.csv are in the same folder as index.html. Error: " +
+            "Could not load CSVs. Make sure Codes.csv, 510k.csv, and 510k2.csv are in the same folder as index.html (and filenames match case). Error: " +
             (err && err.message ? err.message : String(err));
+          console.error(err);
         }
       }
 
-      
       load();
     })();
   </script>
